@@ -69,3 +69,19 @@ def test_plan_rejection_triggers_replan_then_gives_up():
                       plan_review_retries=2, exec_review_retries=2, attempt_cap=10)
     assert not result.passed
     assert "plan" in result.reason.lower()
+
+def test_attempt_cap_exceeded_returns_failed():
+    # Plan passes review (consumes the only attempt slot), then the first
+    # EXECUTION attempt.start raises AttemptCapExceeded -> team fails.
+    runner = StubRunner(responses={
+        "planner": {"tasks": ["t1"]},
+        "plan-reviewer": {"approved": True, "feedback": ""},
+        "executor": {"commits": [{"task": "t1", "red_sha": "r", "green_sha": "g",
+                                  "test_command": ["pytest"], "declared_test_paths": ["t.py"]}]},
+        "execution-reviewer": {"approved": True, "reasons": ["ok"]},
+    })
+    result = run_team(charter={"id": "team-01", "goal": "x"}, contracts=_contracts(),
+                      runner=runner, verifier=_green_verifier,
+                      plan_review_retries=2, exec_review_retries=2, attempt_cap=1)
+    assert not result.passed
+    assert result.reason == "attempt cap exceeded"

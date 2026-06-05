@@ -5,6 +5,7 @@ from typing import Callable, Optional
 from cih.config import RunConfig
 from cih.state import StateHeader, write_state
 from cih.ledger import Ledger, Opportunity, fingerprint
+from cih.merge_queue import MergeOutcome
 
 @dataclass
 class IterationResult:
@@ -15,10 +16,12 @@ class IterationResult:
 
 class Orchestrator:
     def __init__(self, cfg: RunConfig, high_planner_fn: Callable,
-                 team_runner_fn: Callable, run_id: str = "run-1"):
+                 team_runner_fn: Callable, integrate_fn: Optional[Callable] = None,
+                 run_id: str = "run-1"):
         self.cfg = cfg
         self.high_planner_fn = high_planner_fn
         self.team_runner_fn = team_runner_fn
+        self.integrate_fn = integrate_fn or (lambda results, ctx: MergeOutcome())
         self.run_id = run_id
         self.ledger = Ledger()
         self.state_dir = Path(cfg.state_dir)
@@ -39,6 +42,7 @@ class Orchestrator:
         iterations_run = 0
         dry_streak = 0
         stopped_reason = "completed"
+        iteration_results: list[IterationResult] = []
         self._persist_run("in_progress", self.cfg.to_dict())
 
         while True:
@@ -58,11 +62,30 @@ class Orchestrator:
             self._ingest_opportunities(audit)
 
             charters = audit.get("charters", [])[: self.cfg.max_teams_per_iteration]
-            self.team_runner_fn(charters, ctx)  # integration handled inside in real wiring
+            results = self.team_runner_fn(charters, ctx)
+            outcome = self.integrate_fn(results, ctx)
+
+            # mark the ledger from the integration outcome (drives convergence)
+            fp_by_team = {c["id"]: c["opportunity_fp"]
+                          for c in charters if c.get("opportunity_fp")}
+            for tid in outcome.merged:
+                fp = fp_by_team.get(tid)
+                if fp and self.ledger.get(fp):
+                    self.ledger.mark_merged(fp)
+            for tid in outcome.rejected:
+                fp = fp_by_team.get(tid)
+                if fp and self.ledger.get(fp):
+                    self.ledger.record_attempt_failure(
+                        fp, current_iteration=i,
+                        cooldown_iterations=self.cfg.cooldown_iterations,
+                        max_attempts=self.cfg.opportunity_max_attempts)
+
             iterations_run = i
 
             dry = self.ledger.is_dry(self.cfg.value_threshold, current_iteration=i)
             dry_streak = dry_streak + 1 if dry else 0
+            iteration_results.append(IterationResult(
+                iteration=i, charters=charters, team_results=results, dry=dry))
 
             iter_dir = self.state_dir / "iterations" / f"iter-{i:03d}"
             write_state(iter_dir / "audit.json",
@@ -73,7 +96,8 @@ class Orchestrator:
                 stopped_reason = "converged"
                 break
 
-        summary = {"iterations_run": iterations_run, "stopped_reason": stopped_reason}
+        summary = {"iterations_run": iterations_run, "stopped_reason": stopped_reason,
+                   "iterations": len(iteration_results)}
         self._persist_run("done", {"config": self.cfg.to_dict(), "summary": summary})
         return summary
 
