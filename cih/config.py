@@ -16,7 +16,7 @@ class RunConfig:
     iterations: Optional[int] = None
     max_iterations: int = 25
     budget_cap: Optional[int] = None
-    focus_areas: list = field(default_factory=list)
+    focus_areas: list[str] = field(default_factory=list)
     value_threshold: float = 0.5
     convergence_dry_streak: int = 2
     plan_review_retries: int = 2
@@ -39,11 +39,22 @@ class RunConfig:
             raise ConfigError("target_repo and state_dir must be distinct")
         if t in s.parents or s in t.parents:
             raise ConfigError("state_dir must not be nested inside target_repo (or vice versa)")
+        for label, p in (("target_repo", t), ("state_dir", s)):
+            if not p.is_dir():
+                raise ConfigError(f"{label} must be an existing directory: {p}")
 
     @classmethod
     def create(cls, **kwargs) -> "RunConfig":
-        if kwargs.get("mode") not in _MODES:
+        mode = kwargs.get("mode")
+        if mode not in _MODES:
             raise ConfigError(f"mode must be one of {_MODES}")
+        iterations = kwargs.get("iterations")
+        if mode == "fixed-N":
+            if not isinstance(iterations, int) or iterations <= 0:
+                raise ConfigError("fixed-N mode requires iterations to be a positive int")
+        elif mode == "until-converged":
+            if iterations is not None:
+                raise ConfigError("until-converged mode must not set iterations")
         cls._validate_paths(kwargs["target_repo"], kwargs["state_dir"])
         return cls(**kwargs)
 

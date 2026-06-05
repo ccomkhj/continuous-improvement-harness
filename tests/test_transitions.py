@@ -17,3 +17,9 @@ def test_assert_transition_raises_on_invalid():
 
 def test_assert_transition_passes_on_valid():
     assert_transition(Status.IN_PROGRESS, Status.MERGED)  # no raise
+
+def test_reopen_chain_is_valid():
+    assert is_valid_transition(Status.REJECTED, Status.COOLDOWN)
+    assert is_valid_transition(Status.COOLDOWN, Status.OPEN)
+    assert is_valid_transition(Status.DEFERRED, Status.OPEN)
+    assert not is_valid_transition(Status.COOLDOWN, Status.MERGED)

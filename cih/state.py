@@ -27,7 +27,7 @@ def write_state(path: Path, header: StateHeader, body: Any) -> None:
     if path.exists():
         try:
             created_at = json.loads(path.read_text())["created_at"]
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError, OSError):
             pass
     doc = {"schema_version": SCHEMA_VERSION, **asdict(header),
            "created_at": created_at, "updated_at": _now(), "body": body}
