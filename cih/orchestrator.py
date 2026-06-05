@@ -118,7 +118,9 @@ def reconcile(cfg: RunConfig, run_id: str) -> dict:
     if target_repo.exists():
         for exec_path in sorted(state_dir.glob("iterations/*/teams/*/execution.json")):
             team_id = exec_path.parent.name
-            branch = f"cih/{run_id}/{team_id}"
+            # branches are iteration-scoped: cih/<run_id>/iter-NNN/<team_id>
+            iter_id = exec_path.parent.parent.parent.name
+            branch = f"cih/{run_id}/{iter_id}/{team_id}"
             try:
                 run_git(["rev-parse", "--verify", branch], cwd=target_repo)
             except GitError:
@@ -128,6 +130,12 @@ def reconcile(cfg: RunConfig, run_id: str) -> dict:
             except (json.JSONDecodeError, OSError):
                 issues.append(f"execution.json unreadable for {team_id}")
                 continue
+            head_sha = body.get("head_sha")
+            if head_sha:
+                try:
+                    run_git(["cat-file", "-e", f"{head_sha}^{{commit}}"], cwd=target_repo)
+                except GitError:
+                    issues.append(f"head_sha {head_sha} missing ({team_id})")
             for commit in body.get("commits", []):
                 for key in ("red_sha", "green_sha"):
                     sha = commit.get(key)

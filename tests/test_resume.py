@@ -23,11 +23,17 @@ def _seed_repo(path):
     _git(["commit", "-q", "-m", "init"], path)
     return _git(["rev-parse", "HEAD"], path)
 
-def _write_execution(state_dir, run_id, team_id, commits, iter_id="iter-001"):
+def _write_execution(state_dir, run_id, team_id, commits, iter_id="iter-001",
+                     head_sha=None, branch=None):
     p = (Path(state_dir) / "iterations" / iter_id / "teams" / team_id /
          "execution.json")
+    body = {"commits": commits}
+    if branch is not None:
+        body["branch"] = branch
+    if head_sha is not None:
+        body["head_sha"] = head_sha
     write_state(p, StateHeader(run_id, iter_id, team_id, None, "passed", "team"),
-                {"commits": commits})
+                body)
 
 def test_reconcile_flags_missing_run_json(tmp_path):
     cfg = _cfg(tmp_path)
@@ -54,7 +60,7 @@ def test_reconcile_flags_missing_branch(tmp_path):
                      [{"red_sha": base, "green_sha": base}])
     report = reconcile(cfg, run_id="run-1")
     assert report["resumable"] is False
-    assert any("cih/run-1/team-99" in i for i in report["issues"])
+    assert any("cih/run-1/iter-001/team-99" in i for i in report["issues"])
 
 def test_reconcile_flags_missing_commit(tmp_path):
     cfg = _cfg(tmp_path)
@@ -63,9 +69,22 @@ def test_reconcile_flags_missing_commit(tmp_path):
     Orchestrator(cfg, high_planner_fn=lambda ctx: {"opportunities": [], "charters": []},
                  team_runner_fn=lambda *a, **k: []).run()
     # create the branch so the branch check passes, but reference a bogus red_sha
-    _git(["branch", "cih/run-1/team-01", base], repo)
+    _git(["branch", "cih/run-1/iter-001/team-01", base], repo)
     _write_execution(cfg.state_dir, "run-1", "team-01",
-                     [{"red_sha": "0" * 40, "green_sha": base}])
+                     [{"red_sha": "0" * 40, "green_sha": base}], head_sha=base)
     report = reconcile(cfg, run_id="run-1")
     assert report["resumable"] is False
     assert any("commit" in i and "0000000" in i for i in report["issues"])
+
+def test_reconcile_flags_missing_head_sha(tmp_path):
+    cfg = _cfg(tmp_path)
+    repo = Path(cfg.target_repo)
+    base = _seed_repo(repo)
+    Orchestrator(cfg, high_planner_fn=lambda ctx: {"opportunities": [], "charters": []},
+                 team_runner_fn=lambda *a, **k: []).run()
+    _git(["branch", "cih/run-1/iter-001/team-01", base], repo)
+    # persisted head_sha does not resolve in the repo
+    _write_execution(cfg.state_dir, "run-1", "team-01", [], head_sha="0" * 40)
+    report = reconcile(cfg, run_id="run-1")
+    assert report["resumable"] is False
+    assert any("head_sha" in i and "0000000" in i for i in report["issues"])
