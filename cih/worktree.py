@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
-from cih.safety import run_git
+from cih.safety import run_git, GitError
 
 @dataclass
 class Worktree:
@@ -34,5 +34,6 @@ class WorktreeManager:
         # best-effort branch cleanup
         try:
             run_git(["branch", "-D", wt.branch], cwd=self.repo, log=self.log)
-        except Exception:
-            pass
+        except GitError:
+            if self.log:
+                self.log(f"worktree branch cleanup failed (leaked): {wt.branch}")

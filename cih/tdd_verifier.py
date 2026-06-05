@@ -1,13 +1,14 @@
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from cih.safety import run_git
+from cih.safety import run_git, GitError
 
 @dataclass
 class TddVerdict:
     eligible: bool          # could we mechanically prove anything?
     passed: bool
     reason: str = ""
+    baseline_ok: bool = False
     red_failed: bool = False
     green_passed: bool = False
     full_suite_passed: bool = False
@@ -17,10 +18,13 @@ class TddVerdict:
     green_sha: str = ""
 
 def _checkout(repo: Path, sha: str):
-    run_git(["checkout", "-q", sha], cwd=repo)
+    run_git(["checkout", "-q", "--force", sha], cwd=repo)
 
 def _run(repo: Path, cmd: list[str]) -> int:
     return subprocess.run(cmd, cwd=str(repo), capture_output=True, text=True).returncode
+
+def _is_clean(repo: Path) -> bool:
+    return run_git(["status", "--porcelain"], cwd=repo).strip() == ""
 
 def _changed_paths(repo: Path, base: str, head: str) -> list[str]:
     out = run_git(["diff", "--name-only", base, head], cwd=repo)
@@ -41,8 +45,26 @@ def verify_tdd(repo: Path, red_sha: str, green_sha: str,
         return v
 
     original = run_git(["rev-parse", "HEAD"], cwd=repo).strip()
+
+    # I1: refuse to operate on a dirty working tree (do not proceed, HEAD untouched)
+    if not _is_clean(repo):
+        v.reason = "working tree dirty before verification"
+        return v
+
     try:
-        red_parent = run_git(["rev-parse", f"{red_sha}^"], cwd=repo).strip()
+        # I2: validate commit ancestry before any gate.
+        # (a) green must descend from red.
+        try:
+            run_git(["merge-base", "--is-ancestor", red_sha, green_sha], cwd=repo)
+        except GitError:
+            v.reason = "green is not a descendant of red"
+            return v
+        # (b) red must have exactly one parent (no root/merge commits).
+        parents = run_git(["rev-list", "--parents", "-n", "1", red_sha], cwd=repo).split()
+        if len(parents) != 2:
+            v.reason = "red commit must have exactly one parent (no root/merge commits)"
+            return v
+        red_parent = parents[1]
 
         # red commit must touch only test paths
         red_changes = _changed_paths(repo, red_parent, red_sha)
@@ -50,10 +72,24 @@ def verify_tdd(repo: Path, red_sha: str, green_sha: str,
             v.reason = "red commit changed non-test paths"
             return v
 
-        # red commit's test command must FAIL
+        # C2: baseline (red parent) must be clean and green (exit 0) or have no tests (exit 5).
+        _checkout(repo, red_parent)
+        if not _is_clean(repo):
+            v.reason = "baseline (red parent) not clean/green"
+            return v
+        if _run(repo, test_command) not in (0, 5):
+            v.reason = "baseline (red parent) not clean/green"
+            return v
+        v.baseline_ok = True
+
+        # C1: red commit's test command must FAIL with a genuine test failure (exit 1).
         _checkout(repo, red_sha)
-        if _run(repo, test_command) == 0:
+        red_code = _run(repo, test_command)
+        if red_code == 0:
             v.reason = "red commit did not fail"
+            return v
+        if red_code != 1:
+            v.reason = "red commit failure was a collection/usage error, not a test failure"
             return v
         v.red_failed = True
 
@@ -88,4 +124,8 @@ def verify_tdd(repo: Path, red_sha: str, green_sha: str,
         v.reason = "red->green verified"
         return v
     finally:
-        _checkout(repo, original)
+        # I1: restore HEAD robustly; never mask an in-flight exception.
+        try:
+            _checkout(repo, original)
+        except Exception:
+            pass
