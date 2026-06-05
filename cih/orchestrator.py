@@ -76,3 +76,14 @@ class Orchestrator:
         summary = {"iterations_run": iterations_run, "stopped_reason": stopped_reason}
         self._persist_run("done", {"config": self.cfg.to_dict(), "summary": summary})
         return summary
+
+def reconcile(cfg: RunConfig, run_id: str) -> dict:
+    """Compare persisted state against ground truth before resuming."""
+    issues = []
+    state_dir = Path(cfg.state_dir)
+    run_json = state_dir / "run.json"
+    if not run_json.exists():
+        issues.append("run.json missing")
+    if not Path(cfg.target_repo).exists():
+        issues.append("target_repo missing")
+    return {"resumable": not issues, "issues": issues}
