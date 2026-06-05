@@ -36,10 +36,20 @@ class ClaudeCliRunner:
         proc = subprocess.run(cmd, cwd=self.cwd, capture_output=True, text=True)
         if proc.returncode != 0:
             raise RuntimeError(f"claude failed for {contract.role}: {proc.stderr}")
-        envelope = json.loads(proc.stdout)
-        # claude -p --output-format json wraps content in {"result": "..."}
-        result = envelope.get("result", envelope)
-        return result if isinstance(result, dict) else json.loads(result)
+        try:
+            envelope = json.loads(proc.stdout)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"{contract.role}: non-JSON stdout from claude -p: {proc.stdout[:500]!r}") from e
+        if envelope.get("is_error"):
+            raise RuntimeError(f"{contract.role}: claude reported error: {envelope.get('result')}")
+        result = envelope.get("result")
+        if isinstance(result, dict):
+            return result
+        try:
+            return json.loads(result)
+        except (TypeError, json.JSONDecodeError) as e:
+            from cih.contracts import OutputValidationError
+            raise OutputValidationError(f"{contract.role}: result was not JSON: {result!r}") from e
 
 def invoke(runner: AgentRunner, contract: AgentContract, input_data: dict) -> dict:
     output = runner.run(contract, input_data)

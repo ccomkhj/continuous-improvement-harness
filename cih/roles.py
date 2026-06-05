@@ -26,7 +26,17 @@ _OUTPUT_SCHEMAS = {
     },
     "executor": {
         "type": "object", "required": ["commits"],
-        "properties": {"commits": {"type": "array"}},
+        "properties": {"commits": {"type": "array", "items": {
+            "type": "object",
+            "required": ["task", "red_sha", "green_sha", "test_command", "declared_test_paths"],
+            "properties": {
+                "task": {"type": "string"},
+                "red_sha": {"type": "string"},
+                "green_sha": {"type": "string"},
+                "test_command": {"type": "array", "items": {"type": "string"}},
+                "declared_test_paths": {"type": "array", "items": {"type": "string"}},
+            },
+        }}},
     },
     "execution-reviewer": {
         "type": "object", "required": ["approved", "reasons"],

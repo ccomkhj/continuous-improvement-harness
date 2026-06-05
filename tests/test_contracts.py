@@ -29,3 +29,12 @@ def test_version_hash_is_stable():
                        role_prompt="Plan it.", input_schema={"type": "object"},
                        output_schema=PLAN_OUT, allowed_tools=["Read"])
     assert c1.prompt_hash() == c2.prompt_hash()
+
+def test_hash_changes_with_allowed_tools():
+    c1 = AgentContract(role="planner", agent_version="1.0.0",
+                       role_prompt="Plan it.", input_schema={"type": "object"},
+                       output_schema=PLAN_OUT, allowed_tools=["Read"])
+    c2 = AgentContract(role="planner", agent_version="1.0.0",
+                       role_prompt="Plan it.", input_schema={"type": "object"},
+                       output_schema=PLAN_OUT, allowed_tools=["Read", "Edit"])
+    assert c1.prompt_hash() != c2.prompt_hash()
