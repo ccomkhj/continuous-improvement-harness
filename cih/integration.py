@@ -13,6 +13,7 @@ execution-reviewer there, and threads the rolling tip via the merge queue.
 Using merge (not rebase) preserves the executor commit SHAs so `reconcile` can
 still resolve them, and lets iteration N+1 build on iteration N's merged result.
 """
+import functools
 import subprocess
 from pathlib import Path
 
@@ -20,13 +21,14 @@ from cih import merge_queue
 from cih.agents import invoke
 from cih.safety import GitError, run_git
 from cih.state import StateHeader, write_state
+from cih.tdd_verifier import verify_tdd
 from cih.team import TeamResult, run_team
 from cih.worktree import WorktreeManager
 
 
-def build_integration(*, contracts, runner, verifier, repo, worktrees_root, run_id,
+def build_integration(*, contracts, runner, verifier=None, repo, worktrees_root, run_id,
                       base_sha, state_dir, plan_review_retries, exec_review_retries,
-                      attempt_cap, integration_retries, log=None):
+                      attempt_cap, integration_retries, tdd_adapter="pytest", log=None):
     mgr = WorktreeManager(repo, worktrees_root, run_id, log)
     repo = Path(repo)
     worktrees_root = Path(worktrees_root)
@@ -78,10 +80,16 @@ def build_integration(*, contracts, runner, verifier, repo, worktrees_root, run_
             # Iteration-scoped worktree/branch: cih/<run_id>/iter-NNN/<team_id>.
             # Branch off the CURRENT integration head so teams build on prior merges.
             wt = mgr.create(f"{iter_id}/{team_id}", state["head"])
+            # When no explicit verifier is injected (production), bind a real
+            # mechanical TDD verifier to THIS team's worktree path.
+            team_verifier = verifier
+            if team_verifier is None:
+                team_verifier = functools.partial(
+                    verify_tdd, repo=wt.path, adapter=tdd_adapter)
             try:
                 result = run_team(
                     charter=charter, contracts=contracts, runner=runner,
-                    verifier=verifier, plan_review_retries=plan_review_retries,
+                    verifier=team_verifier, plan_review_retries=plan_review_retries,
                     exec_review_retries=exec_review_retries, attempt_cap=attempt_cap,
                     base_sha=state["head"], branch=wt.branch, worktree_path=wt.path)
             except Exception as e:  # don't leak the worktree on an unexpected crash
