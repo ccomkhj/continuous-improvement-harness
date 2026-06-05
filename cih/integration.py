@@ -52,9 +52,7 @@ def build_integration(*, contracts, runner, verifier=None, repo, worktrees_root,
         iter_id = f"iter-{iteration:03d}"
         teamdir = state_dir / "iterations" / iter_id / "teams" / team_id
         status = "passed" if result.passed else "failed"
-
-        def header():
-            return StateHeader(run_id, iter_id, team_id, None, status, "team")
+        header = StateHeader(run_id, iter_id, team_id, None, status, "team")
 
         body = {"commits": result.commits}
         if wt is not None:
@@ -63,11 +61,11 @@ def build_integration(*, contracts, runner, verifier=None, repo, worktrees_root,
                 body["head_sha"] = mgr.head_sha(wt)
             except GitError:
                 body["head_sha"] = None
-        write_state(teamdir / "plan.json", header(), result.plan)
-        write_state(teamdir / "execution.json", header(), body)
-        write_state(teamdir / "exec_review.json", header(),
+        write_state(teamdir / "plan.json", header, result.plan)
+        write_state(teamdir / "execution.json", header, body)
+        write_state(teamdir / "exec_review.json", header,
                     {"passed": result.passed, "reason": result.reason})
-        write_state(teamdir / "attempts.json", header(), {"attempts": result.attempts})
+        write_state(teamdir / "attempts.json", header, {"attempts": result.attempts})
 
     def team_runner(charters, ctx):
         iteration = ctx["iteration"]

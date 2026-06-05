@@ -68,13 +68,18 @@ class Orchestrator:
             # mark the ledger from the integration outcome (drives convergence)
             fp_by_team = {c["id"]: c["opportunity_fp"]
                           for c in charters if c.get("opportunity_fp")}
+
+            def ledger_fp(team_id):
+                fp = fp_by_team.get(team_id)
+                return fp if fp and self.ledger.get(fp) else None
+
             for tid in outcome.merged:
-                fp = fp_by_team.get(tid)
-                if fp and self.ledger.get(fp):
+                fp = ledger_fp(tid)
+                if fp:
                     self.ledger.mark_merged(fp)
             for tid in outcome.rejected:
-                fp = fp_by_team.get(tid)
-                if fp and self.ledger.get(fp):
+                fp = ledger_fp(tid)
+                if fp:
                     self.ledger.record_attempt_failure(
                         fp, current_iteration=i,
                         cooldown_iterations=self.cfg.cooldown_iterations,

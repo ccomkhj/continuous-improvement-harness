@@ -62,9 +62,9 @@ def run_team(charter: dict, contracts: dict, runner, verifier: Callable,
                              test_command=c["test_command"],
                              declared_test_paths=c["declared_test_paths"])
                     for c in commits] if commits else []
-        if any(v.eligible and not v.passed for v in verdicts):
-            bad = next(v for v in verdicts if v.eligible and not v.passed)
-            reason = f"tdd verifier blocked: {bad.reason}"
+        blocked = next((v for v in verdicts if v.eligible and not v.passed), None)
+        if blocked is not None:
+            reason = f"tdd verifier blocked: {blocked.reason}"
             continue
         suspicious = any(getattr(v, "suspicious_assertions", False) for v in verdicts)
         review = invoke(runner, contracts["execution-reviewer"],
