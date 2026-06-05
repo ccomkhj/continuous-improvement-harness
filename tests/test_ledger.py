@@ -23,6 +23,17 @@ def test_dry_when_no_open_above_threshold_and_none_retryable():
                            confidence=0.1, effort=0.1, risk=0.1, rationale="r"))
     assert led.is_dry(value_threshold=0.5, current_iteration=5)
 
+def test_item_in_cooldown_does_not_block_dryness():
+    led = Ledger()
+    o = Opportunity(fp="f", title="t", scope="s", value=0.9, confidence=0.9,
+                    effort=0.1, risk=0.1, rationale="r")
+    led.upsert(o)
+    led.mark_cooldown("f", current_iteration=1, cooldown_iterations=5)
+    # inside cooldown -> excluded from open -> dry
+    assert led.is_dry(0.5, current_iteration=2) is True
+    # after cooldown -> reopened -> not dry
+    assert led.is_dry(0.5, current_iteration=6) is False
+
 def test_cooldown_blocks_reselection_until_expired(monkeypatch):
     led = Ledger()
     o = Opportunity(fp="f", title="t", scope="s", value=0.9, confidence=0.9,

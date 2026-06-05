@@ -29,3 +29,18 @@ def test_validate_no_forbidden_blocks_harness_paths():
 
 def test_validate_no_forbidden_allows_clean_paths():
     validate_no_forbidden(["src/app.py", "tests/test_app.py"], forbidden_paths())
+
+def test_validate_no_forbidden_blocks_top_level_secrets():
+    with pytest.raises(GitError):
+        validate_no_forbidden(["secrets/key.txt"], forbidden_paths())
+
+def test_validate_no_forbidden_blocks_traversal():
+    with pytest.raises(GitError):
+        validate_no_forbidden(["../outside.py"], forbidden_paths())
+
+def test_validate_no_forbidden_blocks_absolute():
+    with pytest.raises(GitError):
+        validate_no_forbidden(["/etc/passwd"], forbidden_paths())
+
+def test_validate_no_forbidden_allows_normal_src():
+    validate_no_forbidden(["src/app.py"], forbidden_paths())

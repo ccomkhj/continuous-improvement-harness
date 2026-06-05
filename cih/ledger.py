@@ -55,10 +55,11 @@ class Ledger:
                 if o.state == "open" and o.value >= value_threshold]
 
     def is_dry(self, value_threshold: float, current_iteration: int) -> bool:
-        self._refresh_cooldowns(current_iteration)
-        actionable = self.select_open(value_threshold, current_iteration)
-        retryable = [o for o in self._items.values() if o.state == "cooldown"]
-        return not actionable and not retryable
+        # Spec §5: dry = no open opportunity above threshold AND no retryable
+        # opportunity OUTSIDE cooldown. select_open() refreshes cooldowns first,
+        # so items whose cooldown has elapsed are already reopened and counted;
+        # items still cooling are correctly excluded.
+        return not self.select_open(value_threshold, current_iteration)
 
     def mark_merged(self, fp: str) -> None:
         self._items[fp].state = "merged"
