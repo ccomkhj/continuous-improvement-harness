@@ -102,12 +102,40 @@ class Orchestrator:
         return summary
 
 def reconcile(cfg: RunConfig, run_id: str) -> dict:
-    """Compare persisted state against ground truth before resuming."""
+    """Compare persisted state against git ground truth before resuming (spec §10)."""
+    import json
+    from cih.safety import run_git, GitError
+
     issues = []
     state_dir = Path(cfg.state_dir)
-    run_json = state_dir / "run.json"
-    if not run_json.exists():
+    target_repo = Path(cfg.target_repo)
+    if not (state_dir / "run.json").exists():
         issues.append("run.json missing")
-    if not Path(cfg.target_repo).exists():
+    if not target_repo.exists():
         issues.append("target_repo missing")
+
+    # Ground-truth git checks per persisted team. Skipped if the repo is absent.
+    if target_repo.exists():
+        for exec_path in sorted(state_dir.glob("iterations/*/teams/*/execution.json")):
+            team_id = exec_path.parent.name
+            branch = f"cih/{run_id}/{team_id}"
+            try:
+                run_git(["rev-parse", "--verify", branch], cwd=target_repo)
+            except GitError:
+                issues.append(f"branch {branch} missing")
+            try:
+                body = json.loads(exec_path.read_text()).get("body", {})
+            except (json.JSONDecodeError, OSError):
+                issues.append(f"execution.json unreadable for {team_id}")
+                continue
+            for commit in body.get("commits", []):
+                for key in ("red_sha", "green_sha"):
+                    sha = commit.get(key)
+                    if not sha:
+                        continue
+                    try:
+                        run_git(["cat-file", "-e", f"{sha}^{{commit}}"], cwd=target_repo)
+                    except GitError:
+                        issues.append(f"commit {sha} missing ({team_id} {key})")
+
     return {"resumable": not issues, "issues": issues}
