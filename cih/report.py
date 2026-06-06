@@ -70,6 +70,8 @@ def _render_ledger(state_dir: Path) -> str:
                 "<p class='muted'>ledger.json unavailable</p></section>")
     rows = []
     for opp in body.values():
+        if not isinstance(opp, dict):
+            continue
         state = opp.get("state", "unknown")
         rows.append(
             "<tr>"
@@ -104,15 +106,17 @@ def _render_one_iteration(d: Path) -> str:
         return (f"<div class='iter'><b>Iteration {_esc(num)}</b> "
                 "<span class='muted'>(teams.json unavailable)</span></div>")
     results = body.get("results", [])
-    merged = [r["team_id"] for r in results if r.get("merged")]
-    rejected = [r["team_id"] for r in results if r.get("rejected")]
+    if not isinstance(results, list):
+        results = []
+    merged = [r.get("team_id") for r in results if isinstance(r, dict) and r.get("merged")]
+    rejected = [r.get("team_id") for r in results if isinstance(r, dict) and r.get("rejected")]
     team_lines = "".join(
         "<li>"
         f"{_esc(r.get('team_id'))} "
         f"<span class='badge s-{'merged' if r.get('merged') else ('rejected' if r.get('rejected') else 'open')}'>"
         f"{'merged' if r.get('merged') else ('rejected' if r.get('rejected') else ('passed' if r.get('passed') else 'failed'))}</span> "
         f"<span class='muted'>{_esc(r.get('reason', ''))}</span></li>"
-        for r in results
+        for r in results if isinstance(r, dict)
     )
     return (
         f"<div class='iter'><b>Iteration {_esc(num)}</b> "
@@ -149,11 +153,11 @@ def render_report(state_dir, *, refresh_seconds: int = 3) -> str:
         f"<body><div class='wrap'>{body_html}</div></body></html>"
     )
 
-def write_report(state_dir, out_path=None) -> Path:
+def write_report(state_dir, out_path=None, refresh_seconds: int = 3) -> Path:
     state_dir = Path(state_dir)
     out = Path(out_path) if out_path is not None else state_dir / "report.html"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(render_report(state_dir))
+    out.write_text(render_report(state_dir, refresh_seconds=refresh_seconds))
     return out
 
 def main(argv=None) -> int:
@@ -163,7 +167,7 @@ def main(argv=None) -> int:
     p.add_argument("--out", default=None)
     p.add_argument("--refresh", type=int, default=3)
     ns = p.parse_args(argv if argv is not None else sys.argv[1:])
-    out = write_report(ns.state_dir, out_path=ns.out)
+    out = write_report(ns.state_dir, out_path=ns.out, refresh_seconds=ns.refresh)
     print(f"wrote {out}")
     return 0
 

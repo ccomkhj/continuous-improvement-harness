@@ -119,3 +119,31 @@ def test_cli_main_writes_report(tmp_path):
     rc = main(["--state-dir", str(tmp_path)])
     assert rc == 0
     assert (tmp_path / "report.html").exists()
+
+def test_iteration_tolerates_malformed_result_row(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    teams_body = {
+        "charters": [{"id": "team-01"}],
+        "results": [
+            {"merged": True},          # missing team_id
+            "not-a-dict",              # non-dict entry
+            {"team_id": "team-02", "rejected": True},
+        ],
+    }
+    _write(tmp_path / "iterations" / "iter-001" / "teams.json", "open", teams_body)
+    html = render_report(tmp_path)  # must not raise
+    assert "Iteration 1" in html or "iter-001" in html
+    assert "team-02" in html
+
+def test_write_report_forwards_refresh_seconds(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    out = write_report(tmp_path, refresh_seconds=7)
+    assert 'content="7"' in out.read_text()
+
+def test_ledger_tolerates_non_dict_value(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    _write(tmp_path / "ledger.json", "in_progress",
+           {"fp1": "not-a-dict",
+            "fp2": {"title": "Good one", "state": "open"}})
+    html = render_report(tmp_path)  # must not raise
+    assert "Good one" in html
