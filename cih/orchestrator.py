@@ -17,12 +17,13 @@ class IterationResult:
 class Orchestrator:
     def __init__(self, cfg: RunConfig, high_planner_fn: Callable,
                  team_runner_fn: Callable, integrate_fn: Optional[Callable] = None,
-                 run_id: str = "run-1"):
+                 run_id: str = "run-1", on_iteration_end: Optional[Callable] = None):
         self.cfg = cfg
         self.high_planner_fn = high_planner_fn
         self.team_runner_fn = team_runner_fn
         self.integrate_fn = integrate_fn or (lambda results, ctx: MergeOutcome())
         self.run_id = run_id
+        self.on_iteration_end = on_iteration_end
         self.state_dir = Path(cfg.state_dir)
         led_path = self.state_dir / "ledger.json"
         self.ledger = (Ledger.from_dict(read_state(led_path)["body"])
@@ -44,6 +45,15 @@ class Orchestrator:
         write_state(self.state_dir / "ledger.json",
                     StateHeader(self.run_id, None, None, None, status, "orchestrator"),
                     self.ledger.to_dict())
+
+    def _fire_iteration_end(self) -> None:
+        if self.on_iteration_end is None:
+            return
+        try:
+            self.on_iteration_end()
+        except Exception as e:  # best-effort: never abort the run
+            from cih.progress import append_progress
+            append_progress(self.state_dir, f"on_iteration_end callback failed: {e}")
 
     def run(self) -> dict:
         iterations_run = 0
@@ -137,6 +147,7 @@ class Orchestrator:
                 (iter_dir / "iteration.md").write_text("\n".join(lines))
 
                 self._persist_ledger("in_progress")
+                self._fire_iteration_end()
 
                 if self.cfg.mode == "until-converged" and dry_streak >= self.cfg.convergence_dry_streak:
                     stopped_reason = "converged"
@@ -153,6 +164,11 @@ class Orchestrator:
                    "iterations": len(iteration_results)}
         self._persist_run("done", {"config": self.cfg.to_dict(), "summary": summary})
         self._persist_ledger("done")
+        # Per-iteration emission already covers the final state when at least one
+        # iteration ran; fire once here only for a zero-iteration run so the
+        # success path still emits a report. Never fired in the crash branch.
+        if iterations_run == 0:
+            self._fire_iteration_end()
         # Success path only: prune worktree dirs (keeping branch refs). A crashed
         # run (the except branch above) intentionally KEEPS its worktrees for
         # resume/post-mortem and never reaches here.

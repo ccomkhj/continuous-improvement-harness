@@ -252,3 +252,26 @@ def test_teams_json_records_merge_disposition(tmp_path):
     assert by_id["team-01"]["rejected"] is False
     md = (iter_dir / "iteration.md").read_text()
     assert "team-01" in md.split("merged:", 1)[1].split("\n", 1)[0]
+
+
+def test_on_iteration_end_called_each_iteration(tmp_path):
+    cfg = _cfg(tmp_path, iterations=3)
+    calls = {"n": 0}
+    orch = Orchestrator(cfg,
+                        high_planner_fn=lambda ctx: {"opportunities": [], "charters": []},
+                        team_runner_fn=lambda *a, **k: [],
+                        on_iteration_end=lambda: calls.__setitem__("n", calls["n"] + 1))
+    orch.run()
+    assert calls["n"] == 3
+
+
+def test_on_iteration_end_failure_does_not_abort_run(tmp_path):
+    cfg = _cfg(tmp_path, iterations=2)
+    def boom():
+        raise RuntimeError("report boom")
+    orch = Orchestrator(cfg,
+                        high_planner_fn=lambda ctx: {"opportunities": [], "charters": []},
+                        team_runner_fn=lambda *a, **k: [],
+                        on_iteration_end=boom)
+    summary = orch.run()  # must NOT raise
+    assert summary["iterations_run"] == 2
