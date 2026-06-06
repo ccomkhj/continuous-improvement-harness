@@ -109,9 +109,33 @@ class Orchestrator:
                     iteration=i, charters=charters, team_results=results, dry=dry))
 
                 iter_dir = self.state_dir / "iterations" / f"iter-{i:03d}"
-                write_state(iter_dir / "audit.json",
-                            StateHeader(self.run_id, f"iter-{i:03d}", None, None,
-                                        "open", "orchestrator"), audit)
+                iter_header = StateHeader(self.run_id, f"iter-{i:03d}", None, None,
+                                          "open", "orchestrator")
+                write_state(iter_dir / "audit.json", iter_header, audit)
+
+                # spec §10 observability artifacts (orchestrator-owned)
+                merged_set, rejected_set = set(outcome.merged), set(outcome.rejected)
+                teams_body = {
+                    "charters": charters,
+                    "results": [
+                        {"team_id": getattr(r, "team_id", None),
+                         "passed": getattr(r, "passed", None),
+                         "reason": getattr(r, "reason", ""),
+                         "merged": getattr(r, "team_id", None) in merged_set,
+                         "rejected": getattr(r, "team_id", None) in rejected_set}
+                        for r in results
+                    ],
+                }
+                write_state(iter_dir / "teams.json", iter_header, teams_body)
+
+                iter_dir.mkdir(parents=True, exist_ok=True)
+                lines = [f"# Iteration {i}", "",
+                         f"- charters dispatched: {len(charters)}",
+                         f"- merged: {sorted(merged_set)}",
+                         f"- rejected: {sorted(rejected_set)}",
+                         f"- dry: {dry}", ""]
+                (iter_dir / "iteration.md").write_text("\n".join(lines))
+
                 self._persist_ledger("in_progress")
 
                 if self.cfg.mode == "until-converged" and dry_streak >= self.cfg.convergence_dry_streak:

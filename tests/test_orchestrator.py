@@ -206,3 +206,49 @@ def test_run_persists_done_status_on_success(tmp_path):
     orch.run()
     doc = read_state(Path(cfg.state_dir, "run.json"))
     assert doc["status"] == "done"
+
+def test_iteration_emits_teams_json_and_iteration_md(tmp_path):
+    cfg = _cfg(tmp_path, iterations=1)
+    charters = [{"id": "team-01"}, {"id": "team-02"}]
+    def high_planner(ctx):
+        return {"opportunities": [], "charters": list(charters)}
+    def team_runner(cs, ctx):
+        return [TeamResult(team_id=c["id"], passed=True) for c in cs]
+    orch = Orchestrator(cfg, high_planner_fn=high_planner,
+                        team_runner_fn=team_runner)
+    orch.run()
+    iter_dir = Path(cfg.state_dir, "iterations", "iter-001")
+    assert (iter_dir / "teams.json").exists()
+    assert (iter_dir / "iteration.md").exists()
+
+    body = read_state(iter_dir / "teams.json")["body"]
+    assert body["charters"] == charters
+    assert len(body["results"]) == len(charters)
+    for r in body["results"]:
+        assert set(r.keys()) == {"team_id", "passed", "reason", "merged", "rejected"}
+
+    md = (iter_dir / "iteration.md").read_text()
+    assert md.startswith("# Iteration 1")
+
+def test_teams_json_records_merge_disposition(tmp_path):
+    cfg = _cfg(tmp_path, iterations=1)
+    title, scope = "merge me", "scope-1"
+    fp = fingerprint(title, scope)
+    def high_planner(ctx):
+        return {"opportunities": [{"title": title, "scope": scope, "value": 0.9,
+                "confidence": 0.9, "effort": 0.1, "risk": 0.1, "rationale": "r"}],
+                "charters": [{"id": "team-01", "opportunity_fp": fp}]}
+    def team_runner(cs, ctx):
+        return [TeamResult(team_id=c["id"], passed=True) for c in cs]
+    orch = Orchestrator(cfg, high_planner_fn=high_planner,
+                        team_runner_fn=team_runner,
+                        integrate_fn=lambda results, ctx: MergeOutcome(
+                            merged=[r.team_id for r in results]))
+    orch.run()
+    iter_dir = Path(cfg.state_dir, "iterations", "iter-001")
+    body = read_state(iter_dir / "teams.json")["body"]
+    by_id = {r["team_id"]: r for r in body["results"]}
+    assert by_id["team-01"]["merged"] is True
+    assert by_id["team-01"]["rejected"] is False
+    md = (iter_dir / "iteration.md").read_text()
+    assert "team-01" in md.split("merged:", 1)[1].split("\n", 1)[0]
