@@ -31,3 +31,29 @@ def test_meta_refresh_only_when_in_progress(tmp_path):
 def test_missing_run_json_does_not_raise(tmp_path):
     html = render_report(tmp_path)  # empty state_dir
     assert "unavailable" in html.lower()
+
+def test_ledger_rows_render_with_state_classes(tmp_path):
+    # minimal run.json so header renders
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    ledger_body = {
+        "fp1": {"fp": "fp1", "title": "Improve coverage", "scope": "tests/",
+                "value": 0.9, "confidence": 0.8, "effort": 0.2, "risk": 0.1,
+                "rationale": "r", "state": "merged", "attempt_count": 1,
+                "cooldown_until": None},
+        "fp2": {"fp": "fp2", "title": "Refactor io", "scope": "io.py",
+                "value": 0.6, "confidence": 0.5, "effort": 0.5, "risk": 0.4,
+                "rationale": "r", "state": "cooldown", "attempt_count": 2,
+                "cooldown_until": 5},
+    }
+    _write(tmp_path / "ledger.json", "in_progress", ledger_body)
+    html = render_report(tmp_path)
+    assert "Improve coverage" in html
+    assert "Refactor io" in html
+    assert "s-merged" in html
+    assert "s-cooldown" in html
+
+def test_missing_ledger_renders_placeholder(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    html = render_report(tmp_path)
+    assert "Opportunity ledger" in html
+    assert "unavailable" in html.lower()

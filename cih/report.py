@@ -60,13 +60,42 @@ def _render_header(state_dir: Path) -> tuple[str, str]:
     )
     return html_str, status
 
+def _render_ledger(state_dir: Path) -> str:
+    doc = _load_json(Path(state_dir) / "ledger.json")
+    body = doc.get("body") if isinstance(doc, dict) else None
+    if not body:
+        return ("<section><h2>Opportunity ledger</h2>"
+                "<p class='muted'>ledger.json unavailable</p></section>")
+    rows = []
+    for opp in body.values():
+        state = opp.get("state", "unknown")
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(opp.get('title', '?'))}</td>"
+            f"<td class='muted'>{_esc(opp.get('scope', ''))}</td>"
+            f"<td>{_esc(opp.get('value', '—'))}</td>"
+            f"<td>{_esc(opp.get('confidence', '—'))}</td>"
+            f"<td>{_esc(opp.get('effort', '—'))}</td>"
+            f"<td>{_esc(opp.get('risk', '—'))}</td>"
+            f"<td><span class='badge s-{_esc(state)}'>{_esc(state)}</span></td>"
+            f"<td>{_esc(opp.get('attempt_count', 0))}</td>"
+            "</tr>"
+        )
+    return (
+        "<section><h2>Opportunity ledger</h2><table>"
+        "<tr><th>title</th><th>scope</th><th>v</th><th>c</th><th>e</th>"
+        "<th>r</th><th>state</th><th>attempts</th></tr>"
+        + "".join(rows) + "</table></section>"
+    )
+
 def render_report(state_dir, *, refresh_seconds: int = 3) -> str:
     state_dir = Path(state_dir)
     header_html, status = _render_header(state_dir)
     refresh = (f"<meta http-equiv=\"refresh\" content=\"{int(refresh_seconds)}\">"
                if status == "in_progress" else "")
+    body_html = header_html + _render_ledger(state_dir)
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"{refresh}<title>CIH Run report</title><style>{_STYLE}</style></head>"
-        f"<body><div class='wrap'>{header_html}</div></body></html>"
+        f"<body><div class='wrap'>{body_html}</div></body></html>"
     )
