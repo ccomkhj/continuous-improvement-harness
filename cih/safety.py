@@ -44,8 +44,19 @@ def assert_clean_tree(repo, log=None) -> None:
     if out.strip():
         raise GitError(f"target base tree is not clean: {repo}")
 
+def _assert_git_allowed(args) -> None:
+    sub = next((a for a in args if not a.startswith("-")), None)
+    if sub in {"push", "remote"}:
+        raise GitError(f"git '{sub}' is blocked by the harness (no-push invariant)")
+    if sub == "add":
+        after = args[args.index("add") + 1:]
+        flags = {a for a in after if a.startswith("-")}
+        if {"-A", "--all", "-a"} & flags or "." in after:
+            raise GitError("git 'add -A/--all/.' is blocked; use the explicit staging wrapper")
+
 def run_git(args: list[str], cwd: Path,
             log: Optional[Callable[[str], None]] = None) -> str:
+    _assert_git_allowed(args)
     cmd = ["git", *args]
     if log:
         log(f"git -C {cwd} {' '.join(args)}")
