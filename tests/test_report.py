@@ -57,3 +57,27 @@ def test_missing_ledger_renders_placeholder(tmp_path):
     html = render_report(tmp_path)
     assert "Opportunity ledger" in html
     assert "unavailable" in html.lower()
+
+def test_iteration_cards_render_team_disposition(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    teams_body = {
+        "charters": [{"id": "team-01"}, {"id": "team-02"}],
+        "results": [
+            {"team_id": "team-01", "passed": True, "reason": "passed",
+             "merged": True, "rejected": False},
+            {"team_id": "team-02", "passed": False, "reason": "exec rejected",
+             "merged": False, "rejected": True},
+        ],
+    }
+    _write(tmp_path / "iterations" / "iter-001" / "teams.json", "open", teams_body)
+    html = render_report(tmp_path)
+    assert "Iteration 1" in html or "iter-001" in html
+    assert "team-01" in html
+    assert "team-02" in html
+    assert "s-merged" in html      # team-01 disposition
+    assert "s-rejected" in html    # team-02 disposition
+
+def test_missing_iterations_render_placeholder(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    html = render_report(tmp_path)
+    assert "Iterations" in html

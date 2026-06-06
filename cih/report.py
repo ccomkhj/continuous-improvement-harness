@@ -88,12 +88,50 @@ def _render_ledger(state_dir: Path) -> str:
         + "".join(rows) + "</table></section>"
     )
 
+def _iteration_dirs(state_dir: Path):
+    iters = Path(state_dir) / "iterations"
+    if not iters.is_dir():
+        return []
+    return sorted(d for d in iters.iterdir() if d.is_dir() and d.name.startswith("iter-"))
+
+def _render_one_iteration(d: Path) -> str:
+    doc = _load_json(d / "teams.json")
+    body = doc.get("body") if isinstance(doc, dict) else None
+    num = d.name.replace("iter-", "").lstrip("0") or "0"
+    if not body:
+        return (f"<div class='iter'><b>Iteration {_esc(num)}</b> "
+                "<span class='muted'>(teams.json unavailable)</span></div>")
+    results = body.get("results", [])
+    merged = [r["team_id"] for r in results if r.get("merged")]
+    rejected = [r["team_id"] for r in results if r.get("rejected")]
+    team_lines = "".join(
+        "<li>"
+        f"{_esc(r.get('team_id'))} "
+        f"<span class='badge s-{'merged' if r.get('merged') else ('rejected' if r.get('rejected') else 'open')}'>"
+        f"{'merged' if r.get('merged') else ('rejected' if r.get('rejected') else ('passed' if r.get('passed') else 'failed'))}</span> "
+        f"<span class='muted'>{_esc(r.get('reason', ''))}</span></li>"
+        for r in results
+    )
+    return (
+        f"<div class='iter'><b>Iteration {_esc(num)}</b> "
+        f"<span class='muted'>charters {len(body.get('charters', []))} &middot; "
+        f"merged {_esc(merged)} &middot; rejected {_esc(rejected)}</span>"
+        f"<ul>{team_lines}</ul></div>"
+    )
+
+def _render_iterations(state_dir: Path) -> str:
+    dirs = _iteration_dirs(state_dir)
+    if not dirs:
+        return "<section><h2>Iterations</h2><p class='muted'>no iterations yet</p></section>"
+    cards = "".join(_render_one_iteration(d) for d in dirs)
+    return f"<section><h2>Iterations</h2>{cards}</section>"
+
 def render_report(state_dir, *, refresh_seconds: int = 3) -> str:
     state_dir = Path(state_dir)
     header_html, status = _render_header(state_dir)
     refresh = (f"<meta http-equiv=\"refresh\" content=\"{int(refresh_seconds)}\">"
                if status == "in_progress" else "")
-    body_html = header_html + _render_ledger(state_dir)
+    body_html = header_html + _render_ledger(state_dir) + _render_iterations(state_dir)
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"{refresh}<title>CIH Run report</title><style>{_STYLE}</style></head>"
