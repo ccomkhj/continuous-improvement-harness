@@ -8,8 +8,15 @@ def test_merged_is_terminal():
     assert not is_valid_transition(Status.MERGED, Status.OPEN)
     assert not is_valid_transition(Status.MERGED, Status.IN_PROGRESS)
 
-def test_cannot_skip_from_open_to_merged():
-    assert not is_valid_transition(Status.OPEN, Status.MERGED)
+def test_open_to_merged_is_now_valid():
+    # The ledger merges directly from `open` (selected -> applied -> merged)
+    # without an intermediate `in_progress` write, so open->merged is a real
+    # lifecycle edge. The previous test encoded the inverse (wrong) invariant.
+    assert is_valid_transition(Status.OPEN, Status.MERGED) is True
+
+def test_open_to_cooldown_and_expired_are_valid():
+    assert is_valid_transition(Status.OPEN, Status.COOLDOWN) is True
+    assert is_valid_transition(Status.OPEN, Status.EXPIRED) is True
 
 def test_assert_transition_raises_on_invalid():
     with pytest.raises(InvalidTransition):

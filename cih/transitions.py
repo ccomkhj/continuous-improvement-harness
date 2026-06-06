@@ -14,13 +14,14 @@ class InvalidTransition(Exception):
 
 # monotonic-ish: terminal states cannot leave; cooldown can re-open
 _ALLOWED = {
-    Status.OPEN: {Status.IN_PROGRESS, Status.DEFERRED, Status.REJECTED},
+    Status.OPEN:        {Status.IN_PROGRESS, Status.MERGED, Status.COOLDOWN,
+                         Status.DEFERRED, Status.REJECTED, Status.EXPIRED},
     Status.IN_PROGRESS: {Status.MERGED, Status.REJECTED, Status.COOLDOWN},
-    Status.COOLDOWN: {Status.OPEN, Status.EXPIRED},
-    Status.DEFERRED: {Status.OPEN, Status.EXPIRED},
-    Status.REJECTED: {Status.COOLDOWN, Status.EXPIRED},
-    Status.MERGED: set(),
-    Status.EXPIRED: set(),
+    Status.COOLDOWN:    {Status.OPEN, Status.EXPIRED},
+    Status.DEFERRED:    {Status.OPEN, Status.EXPIRED},
+    Status.REJECTED:    {Status.COOLDOWN, Status.EXPIRED, Status.OPEN},
+    Status.MERGED:      set(),
+    Status.EXPIRED:     set(),
 }
 
 def is_valid_transition(src: Status, dst: Status) -> bool:

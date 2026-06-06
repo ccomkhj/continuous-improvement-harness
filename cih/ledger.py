@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
+from cih.transitions import Status, assert_transition
+
 def fingerprint(title: str, scope: str) -> str:
     norm = re.sub(r"\s+", " ", title.strip().lower())
     return hashlib.sha256(f"{norm}|{scope}".encode()).hexdigest()[:16]
@@ -39,13 +41,22 @@ class Ledger:
     def get(self, fp: str) -> Optional[Opportunity]:
         return self._items.get(fp)
 
+    def _set_state(self, o, dst: str) -> None:
+        # A same-state write is an idempotent no-op (e.g. a still-cooling item
+        # re-entering cooldown on a subsequent failed retry); it is trivially
+        # monotonic, so it does not need a table edge.
+        if o.state == dst:
+            return
+        assert_transition(Status(o.state), Status(dst))
+        o.state = dst
+
     def _refresh_cooldowns(self, current_iteration: Optional[int]) -> None:
         if current_iteration is None:
             return
         for o in self._items.values():
             if o.state == "cooldown" and o.cooldown_until is not None \
                     and current_iteration >= o.cooldown_until:
-                o.state = "open"
+                self._set_state(o, "open")
                 o.cooldown_until = None
 
     def select_open(self, value_threshold: float,
@@ -62,12 +73,12 @@ class Ledger:
         return not self.select_open(value_threshold, current_iteration)
 
     def mark_merged(self, fp: str) -> None:
-        self._items[fp].state = "merged"
+        self._set_state(self._items[fp], "merged")
 
     def mark_cooldown(self, fp: str, current_iteration: int,
                       cooldown_iterations: int) -> None:
         o = self._items[fp]
-        o.state = "cooldown"
+        self._set_state(o, "cooldown")
         o.cooldown_until = current_iteration + cooldown_iterations
 
     def record_attempt_failure(self, fp: str, current_iteration: int,
@@ -75,7 +86,7 @@ class Ledger:
         o = self._items[fp]
         o.attempt_count += 1
         if o.attempt_count >= max_attempts:
-            o.state = "expired"
+            self._set_state(o, "expired")
             o.cooldown_until = None
         else:
             self.mark_cooldown(fp, current_iteration, cooldown_iterations)
