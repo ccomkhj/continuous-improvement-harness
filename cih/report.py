@@ -126,12 +126,21 @@ def _render_iterations(state_dir: Path) -> str:
     cards = "".join(_render_one_iteration(d) for d in dirs)
     return f"<section><h2>Iterations</h2>{cards}</section>"
 
+def _render_git_log(state_dir: Path) -> str:
+    text = _read_text(Path(state_dir) / "progress.md")
+    if not text:
+        return ("<section><h2>Git activity</h2>"
+                "<p class='muted'>progress.md unavailable</p></section>")
+    return ("<section><h2>Git activity</h2>"
+            f"<details open><pre>{_esc(text)}</pre></details></section>")
+
 def render_report(state_dir, *, refresh_seconds: int = 3) -> str:
     state_dir = Path(state_dir)
     header_html, status = _render_header(state_dir)
     refresh = (f"<meta http-equiv=\"refresh\" content=\"{int(refresh_seconds)}\">"
                if status == "in_progress" else "")
-    body_html = header_html + _render_ledger(state_dir) + _render_iterations(state_dir)
+    body_html = (header_html + _render_ledger(state_dir)
+                 + _render_iterations(state_dir) + _render_git_log(state_dir))
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"{refresh}<title>CIH Run report</title><style>{_STYLE}</style></head>"

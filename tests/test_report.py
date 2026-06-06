@@ -81,3 +81,18 @@ def test_missing_iterations_render_placeholder(tmp_path):
     _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
     html = render_report(tmp_path)
     assert "Iterations" in html
+
+def test_git_activity_renders_progress_md(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    (tmp_path / "progress.md").write_text(
+        "2026-06-06T00:00:00+00:00 git -C /t worktree add -b cih/run-1/iter-001/team-01 ...\n")
+    html = render_report(tmp_path)
+    assert "Git activity" in html
+    assert "worktree add" in html
+
+def test_git_activity_escapes_html(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    (tmp_path / "progress.md").write_text("git log <script>alert(1)</script>\n")
+    html = render_report(tmp_path)
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
