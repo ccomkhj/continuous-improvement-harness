@@ -47,6 +47,7 @@ class Orchestrator:
 
     def run(self) -> dict:
         iterations_run = 0
+        teams_run = 0
         dry_streak = 0
         stopped_reason = "completed"
         iteration_results: list[IterationResult] = []
@@ -60,6 +61,9 @@ class Orchestrator:
             if iterations_run >= self.cfg.max_iterations:
                 stopped_reason = "max_iterations"
                 break
+            if self.cfg.budget_cap is not None and teams_run >= self.cfg.budget_cap:
+                stopped_reason = "budget_exhausted"
+                break
 
             i = iterations_run + 1
             ctx = {"iteration": i, "target_repo": self.cfg.target_repo,
@@ -69,7 +73,11 @@ class Orchestrator:
             self._ingest_opportunities(audit)
 
             charters = audit.get("charters", [])[: self.cfg.max_teams_per_iteration]
+            if self.cfg.budget_cap is not None:
+                charters = charters[: max(0, self.cfg.budget_cap - teams_run)]
             results = self.team_runner_fn(charters, ctx)
+            if self.cfg.budget_cap is not None:
+                teams_run += len(charters)
             outcome = self.integrate_fn(results, ctx)
 
             # mark the ledger from the integration outcome (drives convergence)

@@ -107,6 +107,45 @@ def test_ledger_state_survives_resume(tmp_path):
     assert orch2.ledger.get(fp).state == "cooldown"
     assert orch2.ledger.get(fp).attempt_count == 1
 
+def test_budget_cap_stops_run(tmp_path):
+    cfg = _cfg(tmp_path, iterations=10, budget_cap=3, max_teams_per_iteration=1)
+    seen = {"n": 0, "total": 0}
+    def high_planner(ctx):
+        seen["n"] += 1
+        return {"opportunities": [], "charters": [{"id": f"team-{seen['n']:02d}"}]}
+    def team_runner(charters, ctx):
+        seen["total"] += len(charters)
+        return [TeamResult(team_id=c["id"], passed=True) for c in charters]
+    orch = Orchestrator(cfg, high_planner_fn=high_planner, team_runner_fn=team_runner)
+    summary = orch.run()
+    assert summary["stopped_reason"] == "budget_exhausted"
+    assert seen["total"] == 3
+
+def test_budget_cap_truncates_within_iteration(tmp_path):
+    cfg = _cfg(tmp_path, iterations=10, budget_cap=3, max_teams_per_iteration=4)
+    seen = {"n": 0, "total": 0}
+    def high_planner(ctx):
+        seen["n"] += 1
+        return {"opportunities": [],
+                "charters": [{"id": f"team-{seen['n']:02d}-{j}"} for j in range(4)]}
+    def team_runner(charters, ctx):
+        seen["total"] += len(charters)
+        return [TeamResult(team_id=c["id"], passed=True) for c in charters]
+    orch = Orchestrator(cfg, high_planner_fn=high_planner, team_runner_fn=team_runner)
+    summary = orch.run()
+    assert seen["total"] == 3
+    assert summary["stopped_reason"] == "budget_exhausted"
+
+def test_budget_cap_none_is_unbounded(tmp_path):
+    cfg = _cfg(tmp_path, iterations=2)
+    def high_planner(ctx):
+        return {"opportunities": [], "charters": []}
+    orch = Orchestrator(cfg, high_planner_fn=high_planner,
+                        team_runner_fn=lambda *a, **k: [])
+    summary = orch.run()
+    assert summary["stopped_reason"] in ("completed",)
+    assert summary["iterations_run"] == 2
+
 def test_merged_opportunity_stays_terminal_after_resume(tmp_path):
     cfg = _cfg(tmp_path, iterations=1)
     title, scope = "merge me", "scope-1"
