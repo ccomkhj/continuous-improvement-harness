@@ -24,7 +24,7 @@ def _seed_repo(path):
     return _git(["rev-parse", "HEAD"], path)
 
 def _write_execution(state_dir, run_id, team_id, commits, iter_id="iter-001",
-                     head_sha=None, branch=None):
+                     head_sha=None, branch=None, status="passed"):
     p = (Path(state_dir) / "iterations" / iter_id / "teams" / team_id /
          "execution.json")
     body = {"commits": commits}
@@ -32,7 +32,7 @@ def _write_execution(state_dir, run_id, team_id, commits, iter_id="iter-001",
         body["branch"] = branch
     if head_sha is not None:
         body["head_sha"] = head_sha
-    write_state(p, StateHeader(run_id, iter_id, team_id, None, "passed", "team"),
+    write_state(p, StateHeader(run_id, iter_id, team_id, None, status, "team"),
                 body)
 
 def test_reconcile_flags_missing_run_json(tmp_path):
@@ -70,6 +70,21 @@ def test_reconcile_flags_missing_branch(tmp_path):
     report = reconcile(cfg, run_id="run-1")
     assert report["resumable"] is False
     assert any("cih/run-1/iter-001/team-99" in i for i in report["issues"])
+
+def test_reconcile_ignores_failed_team_branch(tmp_path):
+    cfg = _cfg(tmp_path)
+    base = _seed_repo(Path(cfg.target_repo))
+    Orchestrator(cfg, high_planner_fn=lambda ctx: {"opportunities": [], "charters": []},
+                 team_runner_fn=lambda *a, **k: []).run()
+    # A team rejected by the execution-reviewer: its branch/worktree were pruned,
+    # so the branch (and head_sha) no longer exist in the repo. status="failed"
+    # is the signal that this is intentional, not a missing-branch issue.
+    _write_execution(cfg.state_dir, "run-1", "team-01",
+                     [{"red_sha": "0" * 40, "green_sha": "0" * 40}],
+                     head_sha="0" * 40, status="failed")
+    report = reconcile(cfg, run_id="run-1")
+    assert report["resumable"] is True
+    assert report["issues"] == []
 
 def test_reconcile_flags_missing_commit(tmp_path):
     cfg = _cfg(tmp_path)

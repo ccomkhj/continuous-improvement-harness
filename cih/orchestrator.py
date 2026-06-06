@@ -160,14 +160,19 @@ def reconcile(cfg: RunConfig, run_id: str) -> dict:
             iter_id = exec_path.parent.parent.parent.name
             branch = f"cih/{run_id}/{iter_id}/{team_id}"
             try:
-                run_git(["rev-parse", "--verify", branch], cwd=target_repo)
-            except GitError:
-                issues.append(f"branch {branch} missing")
-            try:
-                body = json.loads(exec_path.read_text()).get("body", {})
+                doc = json.loads(exec_path.read_text())
             except (json.JSONDecodeError, OSError):
                 issues.append(f"execution.json unreadable for {team_id}")
                 continue
+            # A team rejected by the execution-reviewer persists status="failed"
+            # and has its branch/worktree intentionally pruned — not an issue.
+            if doc.get("status") == "failed":
+                continue
+            try:
+                run_git(["rev-parse", "--verify", branch], cwd=target_repo)
+            except GitError:
+                issues.append(f"branch {branch} missing")
+            body = doc.get("body", {})
             head_sha = body.get("head_sha")
             if head_sha:
                 try:
