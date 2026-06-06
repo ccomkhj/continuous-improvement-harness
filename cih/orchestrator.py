@@ -129,6 +129,12 @@ class Orchestrator:
                    "iterations": len(iteration_results)}
         self._persist_run("done", {"config": self.cfg.to_dict(), "summary": summary})
         self._persist_ledger("done")
+        # Success path only: prune worktree dirs (keeping branch refs). A crashed
+        # run (the except branch above) intentionally KEEPS its worktrees for
+        # resume/post-mortem and never reaches here.
+        td = getattr(self.integrate_fn, "teardown", None)
+        if td:
+            td()
         return summary
 
 def reconcile(cfg: RunConfig, run_id: str) -> dict:

@@ -34,6 +34,9 @@ def build_integration(*, contracts, runner, verifier=None, repo, worktrees_root,
     worktrees_root = Path(worktrees_root)
     state_dir = Path(state_dir)
     pending: dict[str, dict] = {}
+    # Run-scoped (NOT cleared per iteration): every passed-team worktree we keep.
+    # teardown() removes these dirs at run end while preserving their branches.
+    kept: list = []
 
     # Mutable integration state, advances across iterations so improvements compound.
     int_branch = f"cih/{run_id}/integration"
@@ -100,6 +103,7 @@ def build_integration(*, contracts, runner, verifier=None, repo, worktrees_root,
             if result.passed:
                 pending[team_id] = {"worktree": wt, "charter": charter,
                                     "result": result}
+                kept.append(wt)
             else:
                 mgr.remove(wt)
             results.append(result)
@@ -161,4 +165,28 @@ def build_integration(*, contracts, runner, verifier=None, repo, worktrees_root,
                     cwd=repo, log=log)
         return outcome
 
+    def teardown():
+        # Best-effort: prune the worktree DIRECTORIES (integration + every kept
+        # team worktree) at run end while PRESERVING all branch refs, so
+        # reconcile/resume still find them. Idempotent — git's `worktree remove`
+        # on an already-removed worktree raises GitError, which we swallow.
+        int_wt = state.get("int_wt")
+        if int_wt is not None:
+            try:
+                run_git(["worktree", "remove", "--force", str(int_wt)],
+                        cwd=repo, log=log)
+            except GitError:
+                pass
+        for wt in kept:
+            try:
+                run_git(["worktree", "remove", "--force", wt.path],
+                        cwd=repo, log=log)
+            except GitError:
+                pass
+        try:
+            run_git(["worktree", "prune"], cwd=repo, log=log)
+        except GitError:
+            pass
+
+    integrate_fn.teardown = teardown
     return team_runner, integrate_fn

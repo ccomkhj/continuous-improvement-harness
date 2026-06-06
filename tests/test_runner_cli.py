@@ -107,3 +107,31 @@ def test_build_orchestrator_writes_progress_md(tmp_path):
     progress = state / "progress.md"
     assert progress.exists()
     assert progress.read_text().strip() != ""
+
+
+def test_successful_run_leaves_no_worktree_dirs(tmp_path):
+    """A successful orchestrator run tears down its worktree directories at the
+    end, so nothing accumulates under <state_dir>/worktrees/<run_id>/."""
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    state = tmp_path / "state"; state.mkdir()
+    cfg = RunConfig.create(mode="fixed-N", iterations=1,
+                           target_repo=str(repo), state_dir=str(state))
+    charter = {"id": "team-01", "goal": "x", "opportunity_fp": "fp-1",
+               "impact_manifest": {"intended_files": ["a.txt"]}}
+    stub = StubRunner(responses={
+        "high-planner": {"opportunities": [], "charters": [charter]},
+        "planner": {"tasks": ["t1"]},
+        "plan-reviewer": {"approved": True, "feedback": ""},
+        "executor": {"commits": []},
+        "execution-reviewer": {"approved": True, "reasons": []},
+    })
+
+    build_orchestrator(cfg, stub).run()
+
+    # the actual worktree leaf dirs are gone (an empty iter parent dir may remain)
+    assert not (state / "worktrees" / "run-1" / "integration").exists()
+    assert not (state / "worktrees" / "run-1" / "iter-001" / "team-01").exists()
+    # git no longer tracks any cih/run-1 worktree
+    wt_list = subprocess.run(["git", "worktree", "list"], cwd=str(repo),
+                             capture_output=True, text=True).stdout
+    assert "run-1" not in wt_list

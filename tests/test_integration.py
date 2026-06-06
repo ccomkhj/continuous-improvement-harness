@@ -232,6 +232,39 @@ def test_two_iterations_accumulate_changes(tmp_path):
     assert _reachable(repo, "b.txt")
 
 
+def test_teardown_removes_worktrees_keeps_branches(tmp_path):
+    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    runner = _passing_runner()
+    team_runner, integrate_fn = _build(tmp_path, repo, base, runner)
+
+    # one passing iteration with a real commit so the team worktree is kept
+    results = team_runner([_charter("team-01")], {"iteration": 1})
+    team_wt = tmp_path / "wts" / "run-1" / "iter-001" / "team-01"
+    _commit_in_worktree(team_wt, "a.txt", "work", "team work")
+    outcome = integrate_fn(results, {"iteration": 1})
+    assert outcome.merged == ["team-01"]
+
+    int_wt = tmp_path / "wts" / "run-1" / "integration"
+    # both worktree dirs exist before teardown
+    assert int_wt.exists()
+    assert team_wt.exists()
+
+    integrate_fn.teardown()
+
+    # worktree dirs are gone
+    assert not int_wt.exists()
+    assert not team_wt.exists()
+    # no cih/run-1 worktree entries remain registered
+    wt_list = _git(["worktree", "list"], repo)
+    assert "run-1" not in wt_list
+    # branch refs are preserved for reconcile/resume
+    assert _git(["rev-parse", "--verify", "cih/run-1/integration"], repo)
+    assert _git(["rev-parse", "--verify", "cih/run-1/iter-001/team-01"], repo)
+
+    # idempotent: a second call must not raise
+    integrate_fn.teardown()
+
+
 def test_progress_log_records_git_commands(tmp_path):
     repo = tmp_path / "repo"; base = _seed_repo(repo)
     runner = _passing_runner()
