@@ -30,12 +30,16 @@ def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1"):
     from cih.agents import invoke
     from cih.integration import build_integration
     from cih.orchestrator import Orchestrator
+    from cih.progress import append_progress
     from cih.roles import load_contracts
     from cih.safety import run_git
 
     contracts = load_contracts()
     base_sha = run_git(["rev-parse", "HEAD"], cwd=cfg.target_repo).strip()
     state_dir = Path(cfg.state_dir)
+
+    # Append-only audit trail of every git command (spec §11).
+    log = lambda line: append_progress(cfg.state_dir, line)
 
     team_runner, integrate_fn = build_integration(
         contracts=contracts, runner=runner, verifier=None,
@@ -45,7 +49,7 @@ def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1"):
         exec_review_retries=cfg.exec_review_retries,
         attempt_cap=cfg.per_team_attempt_cap,
         integration_retries=cfg.integration_retries,
-        tdd_adapter=cfg.tdd_adapter)
+        tdd_adapter=cfg.tdd_adapter, log=log)
 
     def high_planner_fn(ctx):
         return invoke(runner, contracts["high-planner"], ctx)

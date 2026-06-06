@@ -53,3 +53,27 @@ def test_build_orchestrator_runs_end_to_end(tmp_path):
 
     assert summary["iterations_run"] == 1
     assert (state / "run.json").exists()
+
+
+def test_build_orchestrator_writes_progress_md(tmp_path):
+    """build_orchestrator wires the progress sink, so a run that creates a
+    worktree records git commands to <state_dir>/progress.md (spec §11)."""
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    state = tmp_path / "state"; state.mkdir()
+    cfg = RunConfig.create(mode="fixed-N", iterations=1,
+                           target_repo=str(repo), state_dir=str(state))
+    charter = {"id": "team-01", "goal": "x", "opportunity_fp": "fp-1",
+               "impact_manifest": {"intended_files": ["a.txt"]}}
+    stub = StubRunner(responses={
+        "high-planner": {"opportunities": [], "charters": [charter]},
+        "planner": {"tasks": ["t1"]},
+        "plan-reviewer": {"approved": True, "feedback": ""},
+        "executor": {"commits": []},
+        "execution-reviewer": {"approved": True, "reasons": []},
+    })
+
+    build_orchestrator(cfg, stub).run()
+
+    progress = state / "progress.md"
+    assert progress.exists()
+    assert progress.read_text().strip() != ""

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cih.agents import StubRunner
 from cih.integration import build_integration
+from cih.progress import append_progress
 from cih.roles import load_contracts
 from cih.tdd_verifier import TddVerdict
 
@@ -229,3 +230,24 @@ def test_two_iterations_accumulate_changes(tmp_path):
     # iteration 2 built ON TOP of iteration 1: both files reachable
     assert _reachable(repo, "a.txt")
     assert _reachable(repo, "b.txt")
+
+
+def test_progress_log_records_git_commands(tmp_path):
+    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    runner = _passing_runner()
+    state_dir = tmp_path / "state"
+    team_runner, _ = build_integration(
+        contracts=load_contracts(), runner=runner, verifier=_green_verifier,
+        repo=repo, worktrees_root=tmp_path / "wts", run_id="run-1",
+        base_sha=base, state_dir=state_dir,
+        plan_review_retries=2, exec_review_retries=2, attempt_cap=4,
+        integration_retries=2,
+        log=lambda line: append_progress(state_dir, line))
+
+    team_runner([_charter("team-01")], {"iteration": 1})
+
+    progress = state_dir / "progress.md"
+    assert progress.exists()
+    text = progress.read_text()
+    assert "git -C" in text
+    assert "worktree add" in text
