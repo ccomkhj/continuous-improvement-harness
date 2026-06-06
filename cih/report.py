@@ -1,5 +1,7 @@
+import argparse
 import html as _html
 import json
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -146,3 +148,24 @@ def render_report(state_dir, *, refresh_seconds: int = 3) -> str:
         f"{refresh}<title>CIH Run report</title><style>{_STYLE}</style></head>"
         f"<body><div class='wrap'>{body_html}</div></body></html>"
     )
+
+def write_report(state_dir, out_path=None) -> Path:
+    state_dir = Path(state_dir)
+    out = Path(out_path) if out_path is not None else state_dir / "report.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render_report(state_dir))
+    return out
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(prog="cih.report",
+                                description="Render a CIH run state_dir to HTML")
+    p.add_argument("--state-dir", required=True)
+    p.add_argument("--out", default=None)
+    p.add_argument("--refresh", type=int, default=3)
+    ns = p.parse_args(argv if argv is not None else sys.argv[1:])
+    out = write_report(ns.state_dir, out_path=ns.out)
+    print(f"wrote {out}")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

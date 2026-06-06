@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from cih.report import render_report
+from cih.report import write_report, main
 
 def _write(path: Path, status: str, body) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,3 +97,25 @@ def test_git_activity_escapes_html(tmp_path):
     html = render_report(tmp_path)
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
+
+def test_write_report_writes_html_into_state_dir(tmp_path):
+    _write(tmp_path / "run.json", "done",
+           {"config": {"mode": "fixed-N", "target_repo": "/t"}, "summary": {}})
+    out = write_report(tmp_path)
+    assert out == tmp_path / "report.html"
+    assert out.exists()
+    assert "<!doctype html>" in out.read_text().lower()
+
+def test_write_report_custom_out(tmp_path):
+    _write(tmp_path / "run.json", "done",
+           {"config": {"mode": "fixed-N", "target_repo": "/t"}, "summary": {}})
+    custom = tmp_path / "sub" / "r.html"
+    out = write_report(tmp_path, out_path=custom)
+    assert out == custom and custom.exists()
+
+def test_cli_main_writes_report(tmp_path):
+    _write(tmp_path / "run.json", "done",
+           {"config": {"mode": "fixed-N", "target_repo": "/t"}, "summary": {}})
+    rc = main(["--state-dir", str(tmp_path)])
+    assert rc == 0
+    assert (tmp_path / "report.html").exists()
