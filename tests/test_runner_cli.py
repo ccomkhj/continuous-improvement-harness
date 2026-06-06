@@ -135,3 +135,22 @@ def test_successful_run_leaves_no_worktree_dirs(tmp_path):
     wt_list = subprocess.run(["git", "worktree", "list"], cwd=str(repo),
                              capture_output=True, text=True).stdout
     assert "run-1" not in wt_list
+
+
+def test_parse_args_report_flag(tmp_path):
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    ns = parse_args(["--mode", "fixed-N", "--iterations", "1",
+                     "--target-repo", str(t), "--state-dir", str(s), "--report"])
+    assert ns.report is True
+
+
+def test_build_orchestrator_report_emits_html(tmp_path):
+    repo = tmp_path / "repo"; repo.mkdir(); _seed_repo(repo)
+    state = tmp_path / "state"; state.mkdir()
+    ns = parse_args(["--mode", "fixed-N", "--iterations", "1",
+                     "--target-repo", str(repo), "--state-dir", str(state), "--report"])
+    cfg = build_config(ns)
+    stub = StubRunner(responses={"high-planner": {"opportunities": [], "charters": []}})
+    orch = build_orchestrator(cfg, stub, report=ns.report)
+    orch.run()
+    assert (state / "report.html").exists()

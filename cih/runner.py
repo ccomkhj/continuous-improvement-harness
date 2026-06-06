@@ -11,6 +11,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--state-dir", required=True)
     p.add_argument("--focus", action="append", default=[], dest="focus_areas")
     p.add_argument("--max-iterations", type=int, default=25)
+    p.add_argument("--report", action="store_true",
+                   help="write/update report.html each iteration")
     return p.parse_args(argv)
 
 def build_config(ns: argparse.Namespace) -> RunConfig:
@@ -19,7 +21,7 @@ def build_config(ns: argparse.Namespace) -> RunConfig:
         state_dir=ns.state_dir, focus_areas=ns.focus_areas,
         max_iterations=ns.max_iterations)
 
-def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1"):
+def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1", report: bool = False):
     """Assemble a fully-wired Orchestrator from a config and an agent runner.
 
     This is the testable seam: pass a StubRunner to exercise the whole assembly
@@ -57,16 +59,18 @@ def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1"):
     def high_planner_fn(ctx):
         return invoke(runner, contracts["high-planner"], ctx)
 
+    from cih.report import write_report
+    on_iter = (lambda: write_report(cfg.state_dir)) if report else None
     return Orchestrator(cfg, high_planner_fn=high_planner_fn,
                         team_runner_fn=team_runner, integrate_fn=integrate_fn,
-                        run_id=run_id)
+                        run_id=run_id, on_iteration_end=on_iter)
 
 def main(argv: list[str] | None = None) -> int:
     from cih.agents import ClaudeCliRunner
     ns = parse_args(argv if argv is not None else sys.argv[1:])
     cfg = build_config(ns)
     runner = ClaudeCliRunner(cwd=cfg.target_repo)
-    orch = build_orchestrator(cfg, runner)
+    orch = build_orchestrator(cfg, runner, report=ns.report)
     summary = orch.run()
     print(f"cih: mode={cfg.mode} target={cfg.target_repo} state={cfg.state_dir}")
     print(f"cih: summary={summary}")
