@@ -110,6 +110,7 @@ def _render_one_iteration(d: Path) -> str:
         results = []
     merged = [r.get("team_id") for r in results if isinstance(r, dict) and r.get("merged")]
     rejected = [r.get("team_id") for r in results if isinstance(r, dict) and r.get("rejected")]
+    dry = body.get("dry")
     team_lines = "".join(
         "<li>"
         f"{_esc(r.get('team_id'))} "
@@ -121,7 +122,7 @@ def _render_one_iteration(d: Path) -> str:
     return (
         f"<div class='iter'><b>Iteration {_esc(num)}</b> "
         f"<span class='muted'>charters {len(body.get('charters', []))} &middot; "
-        f"merged {_esc(merged)} &middot; rejected {_esc(rejected)}</span>"
+        f"merged {_esc(merged)} &middot; rejected {_esc(rejected)} &middot; dry {_esc(dry)}</span>"
         f"<ul>{team_lines}</ul></div>"
     )
 

@@ -135,6 +135,7 @@ class Orchestrator:
                          "rejected": getattr(r, "team_id", None) in rejected_set}
                         for r in results
                     ],
+                    "dry": dry,
                 }
                 write_state(iter_dir / "teams.json", iter_header, teams_body)
 

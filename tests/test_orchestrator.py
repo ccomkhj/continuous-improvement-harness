@@ -226,6 +226,10 @@ def test_iteration_emits_teams_json_and_iteration_md(tmp_path):
     assert len(body["results"]) == len(charters)
     for r in body["results"]:
         assert set(r.keys()) == {"team_id", "passed", "reason", "merged", "rejected"}
+    # spec §6.3: teams.json body carries the iteration's dry flag (bool).
+    # No opportunities were ever added, so the iteration is dry.
+    assert isinstance(body["dry"], bool)
+    assert body["dry"] is True
 
     md = (iter_dir / "iteration.md").read_text()
     assert md.startswith("# Iteration 1")
@@ -252,6 +256,22 @@ def test_teams_json_records_merge_disposition(tmp_path):
     assert by_id["team-01"]["rejected"] is False
     md = (iter_dir / "iteration.md").read_text()
     assert "team-01" in md.split("merged:", 1)[1].split("\n", 1)[0]
+
+
+def test_teams_json_records_not_dry_when_opportunity_open(tmp_path):
+    # An ingested opportunity above threshold that is never merged/rejected
+    # stays open, so the iteration is NOT dry (spec §6.3 dry flag in body).
+    cfg = _cfg(tmp_path, iterations=1)
+    def high_planner(ctx):
+        return {"opportunities": [{"title": "t", "scope": "s", "value": 0.9,
+                "confidence": 0.9, "effort": 0.1, "risk": 0.1, "rationale": "r"}],
+                "charters": []}
+    orch = Orchestrator(cfg, high_planner_fn=high_planner,
+                        team_runner_fn=lambda *a, **k: [])
+    orch.run()
+    iter_dir = Path(cfg.state_dir, "iterations", "iter-001")
+    body = read_state(iter_dir / "teams.json")["body"]
+    assert body["dry"] is False
 
 
 def test_on_iteration_end_called_each_iteration(tmp_path):

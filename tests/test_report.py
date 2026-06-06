@@ -78,6 +78,34 @@ def test_iteration_cards_render_team_disposition(tmp_path):
     assert "s-merged" in html      # team-01 disposition
     assert "s-rejected" in html    # team-02 disposition
 
+def test_iteration_card_shows_dry_flag(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    teams_body = {
+        "charters": [{"id": "team-01"}],
+        "results": [
+            {"team_id": "team-01", "passed": True, "reason": "passed",
+             "merged": True, "rejected": False},
+        ],
+        "dry": True,
+    }
+    _write(tmp_path / "iterations" / "iter-001" / "teams.json", "open", teams_body)
+    html = render_report(tmp_path)
+    assert "dry" in html
+    assert "True" in html
+
+def test_iteration_card_tolerates_missing_dry(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    teams_body = {
+        "charters": [{"id": "team-01"}],
+        "results": [
+            {"team_id": "team-01", "passed": True, "reason": "passed",
+             "merged": True, "rejected": False},
+        ],
+    }
+    _write(tmp_path / "iterations" / "iter-001" / "teams.json", "open", teams_body)
+    html = render_report(tmp_path)  # must not raise
+    assert "Iteration 1" in html or "iter-001" in html
+
 def test_missing_iterations_render_placeholder(tmp_path):
     _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
     html = render_report(tmp_path)
