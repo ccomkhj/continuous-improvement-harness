@@ -39,6 +39,11 @@ def validate_no_forbidden(paths: list[str], patterns: list[str]) -> None:
             if _matches(p, pat) or _matches(norm, pat):
                 raise GitError(f"path '{p}' matches forbidden pattern '{pat}'")
 
+def assert_clean_tree(repo, log=None) -> None:
+    out = run_git(["status", "--porcelain"], cwd=repo, log=log)
+    if out.strip():
+        raise GitError(f"target base tree is not clean: {repo}")
+
 def run_git(args: list[str], cwd: Path,
             log: Optional[Callable[[str], None]] = None) -> str:
     cmd = ["git", *args]

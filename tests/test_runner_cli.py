@@ -1,8 +1,10 @@
 import subprocess
+import pytest
 from pathlib import Path
 from cih.runner import parse_args, build_config, build_orchestrator
 from cih.agents import StubRunner
 from cih.config import RunConfig
+from cih.safety import assert_clean_tree, GitError
 
 def test_parse_args_fixed_n(tmp_path):
     t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
@@ -33,6 +35,34 @@ def _seed_repo(path: Path) -> str:
     subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=str(path), check=True)
     return subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(path),
                           capture_output=True, text=True).stdout.strip()
+
+
+def test_assert_clean_tree_passes_on_clean_repo(tmp_path):
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    assert assert_clean_tree(repo) is None
+
+
+def test_assert_clean_tree_raises_on_dirty_repo(tmp_path):
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    (repo / "f.txt").write_text("dirty")  # uncommitted change to a tracked file
+    with pytest.raises(GitError, match="not clean"):
+        assert_clean_tree(repo)
+
+
+def test_build_orchestrator_aborts_on_dirty_target(tmp_path):
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    (repo / "f.txt").write_text("dirty")  # make the target dirty before the run
+    state = tmp_path / "state"; state.mkdir()
+    cfg = RunConfig.create(mode="fixed-N", iterations=1,
+                           target_repo=str(repo), state_dir=str(state))
+    stub = StubRunner(responses={
+        "high-planner": {"opportunities": [], "charters": []}})
+
+    with pytest.raises(GitError):
+        build_orchestrator(cfg, stub)
+
+    # preflight runs before the orchestrator is constructed/run, so no run started
+    assert not (state / "run.json").exists()
 
 
 def test_build_orchestrator_runs_end_to_end(tmp_path):

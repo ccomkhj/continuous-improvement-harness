@@ -32,14 +32,17 @@ def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1"):
     from cih.orchestrator import Orchestrator
     from cih.progress import append_progress
     from cih.roles import load_contracts
-    from cih.safety import run_git
+    from cih.safety import assert_clean_tree, run_git
 
     contracts = load_contracts()
-    base_sha = run_git(["rev-parse", "HEAD"], cwd=cfg.target_repo).strip()
     state_dir = Path(cfg.state_dir)
 
     # Append-only audit trail of every git command (spec §11).
     log = lambda line: append_progress(cfg.state_dir, line)
+
+    # Enforced preflight: refuse to run against a dirty target tree (spec §11).
+    assert_clean_tree(cfg.target_repo, log=log)
+    base_sha = run_git(["rev-parse", "HEAD"], cwd=cfg.target_repo).strip()
 
     team_runner, integrate_fn = build_integration(
         contracts=contracts, runner=runner, verifier=None,
