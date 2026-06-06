@@ -153,4 +153,10 @@ def test_build_orchestrator_report_emits_html(tmp_path):
     stub = StubRunner(responses={"high-planner": {"opportunities": [], "charters": []}})
     orch = build_orchestrator(cfg, stub, report=ns.report)
     orch.run()
-    assert (state / "report.html").exists()
+    report = state / "report.html"
+    assert report.exists()
+    # The FINAL fire happens after the done persist, so the terminal report
+    # shows the done badge and drops the in_progress meta-refresh (liveness).
+    text = report.read_text()
+    assert ">done<" in text
+    assert 'http-equiv="refresh"' not in text

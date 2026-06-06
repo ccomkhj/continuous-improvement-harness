@@ -164,11 +164,11 @@ class Orchestrator:
                    "iterations": len(iteration_results)}
         self._persist_run("done", {"config": self.cfg.to_dict(), "summary": summary})
         self._persist_ledger("done")
-        # Per-iteration emission already covers the final state when at least one
-        # iteration ran; fire once here only for a zero-iteration run so the
-        # success path still emits a report. Never fired in the crash branch.
-        if iterations_run == 0:
-            self._fire_iteration_end()
+        # Final fire AFTER the done persist so the report renders against the
+        # terminal state (done badge, no meta-refresh). The per-iteration fires
+        # above run against in_progress for live mid-run updates. Never fired in
+        # the crash/except branch.
+        self._fire_iteration_end()
         # Success path only: prune worktree dirs (keeping branch refs). A crashed
         # run (the except branch above) intentionally KEEPS its worktrees for
         # resume/post-mortem and never reaches here.

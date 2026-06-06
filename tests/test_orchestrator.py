@@ -262,7 +262,9 @@ def test_on_iteration_end_called_each_iteration(tmp_path):
                         team_runner_fn=lambda *a, **k: [],
                         on_iteration_end=lambda: calls.__setitem__("n", calls["n"] + 1))
     orch.run()
-    assert calls["n"] == 3
+    # N per-iteration fires (after each in_progress persist) + 1 final fire
+    # after the done persist, so the report renders against the terminal state.
+    assert calls["n"] == 4
 
 
 def test_on_iteration_end_failure_does_not_abort_run(tmp_path):
