@@ -36,6 +36,18 @@ tools instead of `claude -p`.
 
 See `docs/superpowers/specs/2026-06-05-cih-design.md` for the full design.
 
+## Visual report
+
+Generate a self-contained HTML view of a run's state:
+
+```bash
+python -m cih.report --state-dir /abs/path/to/state   # writes <state_dir>/report.html
+```
+
+Or pass `--report` to the runner to (re)write `report.html` after every iteration; open it in a
+browser — it auto-refreshes while the run is `in_progress` and stops once it's `done`/`failed`.
+The page is fully self-contained (inline CSS, no network) and read-only over the state directory.
+
 ## Tests
 ```bash
 python -m pytest -q
