@@ -53,69 +53,77 @@ class Orchestrator:
         iteration_results: list[IterationResult] = []
         self._persist_run("in_progress", self.cfg.to_dict())
 
-        while True:
-            if self.cfg.mode == "fixed-N":
-                if iterations_run >= self.cfg.iterations:
-                    stopped_reason = "completed"
+        try:
+            while True:
+                if self.cfg.mode == "fixed-N":
+                    if iterations_run >= self.cfg.iterations:
+                        stopped_reason = "completed"
+                        break
+                if iterations_run >= self.cfg.max_iterations:
+                    stopped_reason = "max_iterations"
                     break
-            if iterations_run >= self.cfg.max_iterations:
-                stopped_reason = "max_iterations"
-                break
-            if self.cfg.budget_cap is not None and teams_run >= self.cfg.budget_cap:
-                stopped_reason = "budget_exhausted"
-                break
+                if self.cfg.budget_cap is not None and teams_run >= self.cfg.budget_cap:
+                    stopped_reason = "budget_exhausted"
+                    break
 
-            i = iterations_run + 1
-            ctx = {"iteration": i, "target_repo": self.cfg.target_repo,
-                   "focus_areas": self.cfg.focus_areas,
-                   "ledger": self.ledger.to_dict()}
-            audit = self.high_planner_fn(ctx)
-            self._ingest_opportunities(audit)
+                i = iterations_run + 1
+                ctx = {"iteration": i, "target_repo": self.cfg.target_repo,
+                       "focus_areas": self.cfg.focus_areas,
+                       "ledger": self.ledger.to_dict()}
+                audit = self.high_planner_fn(ctx)
+                self._ingest_opportunities(audit)
 
-            charters = audit.get("charters", [])[: self.cfg.max_teams_per_iteration]
-            if self.cfg.budget_cap is not None:
-                charters = charters[: max(0, self.cfg.budget_cap - teams_run)]
-            results = self.team_runner_fn(charters, ctx)
-            if self.cfg.budget_cap is not None:
-                teams_run += len(charters)
-            outcome = self.integrate_fn(results, ctx)
+                charters = audit.get("charters", [])[: self.cfg.max_teams_per_iteration]
+                if self.cfg.budget_cap is not None:
+                    charters = charters[: max(0, self.cfg.budget_cap - teams_run)]
+                results = self.team_runner_fn(charters, ctx)
+                if self.cfg.budget_cap is not None:
+                    teams_run += len(charters)
+                outcome = self.integrate_fn(results, ctx)
 
-            # mark the ledger from the integration outcome (drives convergence)
-            fp_by_team = {c["id"]: c["opportunity_fp"]
-                          for c in charters if c.get("opportunity_fp")}
+                # mark the ledger from the integration outcome (drives convergence)
+                fp_by_team = {c["id"]: c["opportunity_fp"]
+                              for c in charters if c.get("opportunity_fp")}
 
-            def ledger_fp(team_id):
-                fp = fp_by_team.get(team_id)
-                return fp if fp and self.ledger.get(fp) else None
+                def ledger_fp(team_id):
+                    fp = fp_by_team.get(team_id)
+                    return fp if fp and self.ledger.get(fp) else None
 
-            for tid in outcome.merged:
-                fp = ledger_fp(tid)
-                if fp:
-                    self.ledger.mark_merged(fp)
-            for tid in outcome.rejected:
-                fp = ledger_fp(tid)
-                if fp:
-                    self.ledger.record_attempt_failure(
-                        fp, current_iteration=i,
-                        cooldown_iterations=self.cfg.cooldown_iterations,
-                        max_attempts=self.cfg.opportunity_max_attempts)
+                for tid in outcome.merged:
+                    fp = ledger_fp(tid)
+                    if fp:
+                        self.ledger.mark_merged(fp)
+                for tid in outcome.rejected:
+                    fp = ledger_fp(tid)
+                    if fp:
+                        self.ledger.record_attempt_failure(
+                            fp, current_iteration=i,
+                            cooldown_iterations=self.cfg.cooldown_iterations,
+                            max_attempts=self.cfg.opportunity_max_attempts)
 
-            iterations_run = i
+                iterations_run = i
 
-            dry = self.ledger.is_dry(self.cfg.value_threshold, current_iteration=i)
-            dry_streak = dry_streak + 1 if dry else 0
-            iteration_results.append(IterationResult(
-                iteration=i, charters=charters, team_results=results, dry=dry))
+                dry = self.ledger.is_dry(self.cfg.value_threshold, current_iteration=i)
+                dry_streak = dry_streak + 1 if dry else 0
+                iteration_results.append(IterationResult(
+                    iteration=i, charters=charters, team_results=results, dry=dry))
 
-            iter_dir = self.state_dir / "iterations" / f"iter-{i:03d}"
-            write_state(iter_dir / "audit.json",
-                        StateHeader(self.run_id, f"iter-{i:03d}", None, None,
-                                    "open", "orchestrator"), audit)
-            self._persist_ledger("in_progress")
+                iter_dir = self.state_dir / "iterations" / f"iter-{i:03d}"
+                write_state(iter_dir / "audit.json",
+                            StateHeader(self.run_id, f"iter-{i:03d}", None, None,
+                                        "open", "orchestrator"), audit)
+                self._persist_ledger("in_progress")
 
-            if self.cfg.mode == "until-converged" and dry_streak >= self.cfg.convergence_dry_streak:
-                stopped_reason = "converged"
-                break
+                if self.cfg.mode == "until-converged" and dry_streak >= self.cfg.convergence_dry_streak:
+                    stopped_reason = "converged"
+                    break
+        except BaseException as e:
+            summary = {"iterations_run": iterations_run, "stopped_reason": "failed",
+                       "error": f"{type(e).__name__}: {e}",
+                       "iterations": len(iteration_results)}
+            self._persist_run("failed", {"config": self.cfg.to_dict(), "summary": summary})
+            self._persist_ledger("failed")
+            raise
 
         summary = {"iterations_run": iterations_run, "stopped_reason": stopped_reason,
                    "iterations": len(iteration_results)}

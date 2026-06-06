@@ -6,6 +6,7 @@ from cih.ledger import fingerprint
 from cih.merge_queue import MergeOutcome
 from cih.state import read_state
 from cih.team import TeamResult
+import pytest
 
 def _cfg(tmp_path, **over):
     t = tmp_path / "target"; s = tmp_path / "state"; t.mkdir(); s.mkdir()
@@ -164,3 +165,44 @@ def test_merged_opportunity_stays_terminal_after_resume(tmp_path):
     orch2 = Orchestrator(cfg, high_planner_fn=high_planner,
                          team_runner_fn=team_runner)
     assert orch2.ledger.get(fp).state == "merged"
+
+def test_run_persists_failed_status_when_loop_raises(tmp_path):
+    cfg = _cfg(tmp_path, iterations=2)
+    def high_planner(ctx):
+        raise RuntimeError("planner exploded")
+    orch = Orchestrator(cfg, high_planner_fn=high_planner,
+                        team_runner_fn=lambda *a, **k: [])
+    with pytest.raises(RuntimeError):
+        orch.run()
+    doc = read_state(Path(cfg.state_dir, "run.json"))
+    assert doc["status"] == "failed"
+    assert "planner exploded" in doc["body"]["summary"]["error"]
+
+def test_integrate_crash_persists_failed_status(tmp_path):
+    cfg = _cfg(tmp_path, iterations=1)
+    title, scope = "boom", "scope-1"
+    fp = fingerprint(title, scope)
+    def high_planner(ctx):
+        return {"opportunities": [{"title": title, "scope": scope, "value": 0.9,
+                "confidence": 0.9, "effort": 0.1, "risk": 0.1, "rationale": "r"}],
+                "charters": [{"id": "team-01", "opportunity_fp": fp}]}
+    def team_runner(charters, ctx):
+        return [TeamResult(team_id=c["id"], passed=True) for c in charters]
+    def integrate_fn(results, ctx):
+        raise RuntimeError("integrate exploded")
+    orch = Orchestrator(cfg, high_planner_fn=high_planner,
+                        team_runner_fn=team_runner, integrate_fn=integrate_fn)
+    with pytest.raises(RuntimeError):
+        orch.run()
+    doc = read_state(Path(cfg.state_dir, "run.json"))
+    assert doc["status"] == "failed"
+
+def test_run_persists_done_status_on_success(tmp_path):
+    cfg = _cfg(tmp_path, iterations=1)
+    def high_planner(ctx):
+        return {"opportunities": [], "charters": []}
+    orch = Orchestrator(cfg, high_planner_fn=high_planner,
+                        team_runner_fn=lambda *a, **k: [])
+    orch.run()
+    doc = read_state(Path(cfg.state_dir, "run.json"))
+    assert doc["status"] == "done"
