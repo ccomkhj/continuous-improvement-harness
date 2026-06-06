@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 from cih.config import RunConfig
-from cih.state import StateHeader, write_state
+from cih.state import StateHeader, write_state, read_state
 from cih.ledger import Ledger, Opportunity, fingerprint
 from cih.merge_queue import MergeOutcome
 
@@ -23,8 +23,10 @@ class Orchestrator:
         self.team_runner_fn = team_runner_fn
         self.integrate_fn = integrate_fn or (lambda results, ctx: MergeOutcome())
         self.run_id = run_id
-        self.ledger = Ledger()
         self.state_dir = Path(cfg.state_dir)
+        led_path = self.state_dir / "ledger.json"
+        self.ledger = (Ledger.from_dict(read_state(led_path)["body"])
+                       if led_path.exists() else Ledger())
 
     def _ingest_opportunities(self, audit: dict) -> None:
         for o in audit.get("opportunities", []):
@@ -37,6 +39,11 @@ class Orchestrator:
         write_state(self.state_dir / "run.json",
                     StateHeader(self.run_id, None, None, None, status, "orchestrator"),
                     body)
+
+    def _persist_ledger(self, status: str) -> None:
+        write_state(self.state_dir / "ledger.json",
+                    StateHeader(self.run_id, None, None, None, status, "orchestrator"),
+                    self.ledger.to_dict())
 
     def run(self) -> dict:
         iterations_run = 0
@@ -96,6 +103,7 @@ class Orchestrator:
             write_state(iter_dir / "audit.json",
                         StateHeader(self.run_id, f"iter-{i:03d}", None, None,
                                     "open", "orchestrator"), audit)
+            self._persist_ledger("in_progress")
 
             if self.cfg.mode == "until-converged" and dry_streak >= self.cfg.convergence_dry_streak:
                 stopped_reason = "converged"
@@ -104,6 +112,7 @@ class Orchestrator:
         summary = {"iterations_run": iterations_run, "stopped_reason": stopped_reason,
                    "iterations": len(iteration_results)}
         self._persist_run("done", {"config": self.cfg.to_dict(), "summary": summary})
+        self._persist_ledger("done")
         return summary
 
 def reconcile(cfg: RunConfig, run_id: str) -> dict:
@@ -116,6 +125,8 @@ def reconcile(cfg: RunConfig, run_id: str) -> dict:
     target_repo = Path(cfg.target_repo)
     if not (state_dir / "run.json").exists():
         issues.append("run.json missing")
+    elif not (state_dir / "ledger.json").exists():
+        issues.append("ledger.json missing")
     if not target_repo.exists():
         issues.append("target_repo missing")
 

@@ -49,6 +49,15 @@ def test_reconcile_ok_after_a_run(tmp_path):
     assert report["resumable"] is True
     assert report["issues"] == []
 
+def test_reconcile_flags_missing_ledger_json(tmp_path):
+    cfg = _cfg(tmp_path)
+    _seed_repo(Path(cfg.target_repo))
+    # run.json exists but no ledger.json was written
+    write_state(Path(cfg.state_dir) / "run.json",
+                StateHeader("run-1", None, None, None, "done", "orchestrator"), {})
+    report = reconcile(cfg, run_id="run-1")
+    assert "ledger.json missing" in report["issues"]
+
 def test_reconcile_flags_missing_branch(tmp_path):
     cfg = _cfg(tmp_path)
     base = _seed_repo(Path(cfg.target_repo))
