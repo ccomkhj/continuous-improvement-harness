@@ -8,8 +8,38 @@ You are the ORCHESTRATOR. You own pure control flow; all domain work is delegate
 defined in `.claude/agents/`. State lives under an absolute `state_dir` OUTSIDE the target repo.
 
 ## Inputs
-- `target_repo` (absolute), `state_dir` (absolute, non-nested with target), `mode`
-  (`fixed-N` with `iterations`, or `until-converged`), `focus_areas`.
+- `target_repo` (absolute) and `state_dir` (absolute, non-nested with target) are **direct
+  args** — never asked in the Q&A.
+- `--depth low|medium|high` controls the scoping question budget: `low`=3, `medium`=6,
+  `high`=10. Default `medium`. Resolve it with `cih.config.depth_budget(name)`, which raises
+  `ConfigError` on an unknown value — surface that and stop before asking anything.
+
+## Scoping phase (interactive — skill only)
+
+Runs ONCE before the loop. The headless runner (`python -m cih.runner`) does NOT do this; it
+requires a complete `run.json`.
+
+1. Resolve the question budget `B` from `--depth` (default `medium` → 6).
+2. Interview the user for the **intent params only**, asking **one `AskUserQuestion` at a
+   time**, multiple-choice where possible:
+   - `focus_areas` — what to audit/improve in the target.
+   - `mode` — `fixed-N` (then `iterations`) vs `until-converged`, plus optional
+     `max_iterations` / `budget_cap`.
+   - `value_threshold` — how aggressive to be (default `0.5`).
+   Spend questions on what you do NOT already know from the invocation. Ask at most `B`
+   questions and **stop early** as soon as every required intent param is confidently known —
+   do not pad to `B`.
+3. Leave every other `run.json` field at its `cih.config.RunConfig` default (retries, team
+   count, cooldown, `tdd_adapter`, `convergence_dry_streak`, …). Do NOT ask about them.
+4. Assemble the config via `RunConfig.create(target_repo=…, state_dir=…, mode=…, …)`. If it
+   raises `ConfigError` (e.g. `fixed-N` without positive `iterations`), surface the message and
+   re-ask the offending param instead of proceeding.
+5. Present a summary of the assembled `run.json` (goal/focus_areas, mode + caps,
+   value_threshold) and ask a **single** "go ahead?" confirmation. If the user declines, let
+   them re-answer/adjust, then re-summarize. On "yes", write `run.json` and enter the loop.
+
+After the confirmation the run is **fully autonomous** — ask no further questions until it
+terminates.
 
 ## Per iteration
 1. Spawn **high-planner**: audit the target (LLM read + focus_areas), update the opportunity
