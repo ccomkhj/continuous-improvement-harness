@@ -4,8 +4,9 @@
 > in TDD-gated iterations** — autonomously, and unable to push or bulk-stage by construction.
 
 <p>
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg">
-  <img alt="Tested with pytest" src="https://img.shields.io/badge/tested%20with-pytest-0a9edc.svg">
+  <a href="https://pypi.org/project/cih-agent/"><img alt="PyPI" src="https://img.shields.io/pypi/v/cih-agent.svg"></a>
+  <a href="https://github.com/ccomkhj/continuous-improvement-harness/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ccomkhj/continuous-improvement-harness/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/pypi/pyversions/cih-agent.svg">
   <img alt="TDD-gated" src="https://img.shields.io/badge/merges-TDD--gated-success.svg">
   <img alt="No-push by construction" src="https://img.shields.io/badge/safety-no--push-critical.svg">
 </p>
