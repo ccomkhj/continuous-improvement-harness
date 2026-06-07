@@ -1,2 +1,6 @@
 .consult/
 .venv/
+docs/superpowers/
+*.egg-info/
+__pycache__/
+.pytest_cache/
