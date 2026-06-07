@@ -39,20 +39,24 @@ down failures, and drives the run to convergence.
 
 ## Quick start
 
-Requires Python 3.11+.
+Requires Python 3.11+ and the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code)
+(`claude`) on your `PATH` — CIH drives it for the agent pipeline.
 
 ```bash
-pip install -e ".[dev]"
+pip install cih-agent
 
 # exactly 3 iterations, focused on tests + performance
-python -m cih.runner --mode fixed-N --iterations 3 \
+cih --mode fixed-N --iterations 3 \
   --target-repo /abs/path/to/target --state-dir /abs/path/to/state \
   --focus tests --focus performance
 
 # or run until converged (bounded by --max-iterations)
-python -m cih.runner --mode until-converged \
+cih --mode until-converged \
   --target-repo /abs/path/to/target --state-dir /abs/path/to/state
 ```
+
+`pip install cih-agent` installs the `cih` console command (the import name stays `cih`);
+`cih …` is equivalent to `python -m cih.runner …`.
 
 `target-repo` and `state-dir` must be absolute, distinct, and non-nested. Add `--report` to write
 a self-contained `report.html` after every iteration. For the interactive version, invoke the
