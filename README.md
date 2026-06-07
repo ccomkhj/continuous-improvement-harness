@@ -1,116 +1,71 @@
 # Continuous Improvement Harness (CIH)
 
-A hierarchical multi-agent harness that autonomously **audits a target codebase, finds
-high-value improvements, and applies them in TDD-gated iterations** — runnable both as a
-headless Python runner and as an interactive Claude Code skill, over one shared on-disk JSON
-state format.
+> A multi-agent system that **audits any codebase, finds high-value improvements, and ships them
+> in TDD-gated iterations** — autonomously, and unable to push or bulk-stage by construction.
 
-The target repo is always a **separate parameter** from the harness itself. CIH never pushes,
-never stages files implicitly, and does all work in disposable per-team git worktrees.
+<p>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg">
+  <img alt="Tested with pytest" src="https://img.shields.io/badge/tested%20with-pytest-0a9edc.svg">
+  <img alt="TDD-gated" src="https://img.shields.io/badge/merges-TDD--gated-success.svg">
+  <img alt="No-push by construction" src="https://img.shields.io/badge/safety-no--push-critical.svg">
+</p>
+
+A change only merges if a **non-LLM verifier proves** — by checking out the commits and running
+the tests itself — that a new test failed before the fix and passes after, with the full suite
+still green. Every team works in a disposable git worktree; `git push` and `git add -A` are
+blocked at the wrapper level. Runs as a headless CLI or an interactive Claude Code skill.
 
 ## How it works
 
-Each iteration, a **high-planner** audits the target and decomposes the work into
-non-overlapping **team charters**. Every charter runs in its own isolated worktree through a
-four-agent pipeline, gated by a mechanical pytest verifier and a skeptical reviewer. Passing
-teams are integrated one at a time through a **bounded merge queue** that re-runs the full suite
-before advancing the integration head. An **opportunity ledger** tracks what's been tried and
-drives convergence.
-
 ```mermaid
 flowchart TB
-    subgraph scope["scoping (skill only, once)"]
-        QA["Q&A interview<br/>--depth low/med/high<br/>→ fills run.json"]
+    ORCH["orchestrator · pure control flow"] --> HP["high-planner<br/>audit → ledger → charters"]
+    subgraph teams["parallel teams · one worktree each"]
+        T1["planner → plan-reviewer →<br/>executor → tdd_verifier (pytest) →<br/>execution-reviewer"]
+        T2["team-NN …"]
     end
-
-    QA --> ORCH
-
-    subgraph loop["per iteration"]
-        ORCH["orchestrator<br/><i>pure control flow + state</i>"]
-        HP["high-planner<br/>audit → ledger → charters"]
-        ORCH --> HP
-
-        subgraph teams["parallel teams · one git worktree each"]
-            direction TB
-            T1["planner → plan-reviewer →<br/>executor → tdd_verifier (pytest) →<br/>execution-reviewer"]
-            T2["team-02 …"]
-            T3["team-NN …"]
-        end
-        HP --> T1 & T2 & T3
-
-        MQ["merge queue<br/>rebase → re-verify → fast-forward<br/><i>(bounded retries)</i>"]
-        T1 & T2 & T3 --> MQ
-        MQ --> DEC{"ledger dry?<br/>/ N reached?"}
-        DEC -->|no| ORCH
-    end
-
-    DEC -->|yes| DONE["stop · final report.html"]
-
-    LED[("opportunity<br/>ledger")]
-    HP <-.-> LED
-    MQ -.-> LED
+    HP --> T1 & T2
+    T1 & T2 --> MQ["merge queue<br/>rebase → re-verify → fast-forward"]
+    MQ --> DEC{"ledger dry / N reached?"}
+    DEC -->|no| ORCH
+    DEC -->|yes| DONE["stop · report.html"]
 ```
 
-**Termination** is either `fixed-N` (exactly N iterations) or `until-converged` (stop once the
-ledger has no open opportunity above the value threshold for `convergence_dry_streak`
-iterations). Both are hard-bounded by `--max-iterations` and a budget cap.
+A **high-planner** scores improvement opportunities and splits them into non-overlapping charters.
+Each charter runs a five-agent pipeline in its own worktree, gated by a mechanical pytest verifier
+and a skeptical reviewer. Passing teams merge **one at a time** through a queue that re-runs the
+full suite before fast-forwarding. An **opportunity ledger** remembers what's been tried, cools
+down failures, and drives the run to convergence.
 
-## Run (headless)
+## Quick start
+
+Requires Python 3.11+.
 
 ```bash
+pip install -e ".[dev]"
+
+# exactly 3 iterations, focused on tests + performance
 python -m cih.runner --mode fixed-N --iterations 3 \
   --target-repo /abs/path/to/target --state-dir /abs/path/to/state \
   --focus tests --focus performance
-```
 
-`until-converged` runs until the ledger is dry, bounded by `--max-iterations`:
-
-```bash
+# or run until converged (bounded by --max-iterations)
 python -m cih.runner --mode until-converged \
-  --target-repo /abs/path/to/target --state-dir /abs/path/to/state \
-  --max-iterations 25
+  --target-repo /abs/path/to/target --state-dir /abs/path/to/state
 ```
 
-## Run (interactive)
+`target-repo` and `state-dir` must be absolute, distinct, and non-nested. Add `--report` to write
+a self-contained `report.html` after every iteration. For the interactive version, invoke the
+`cih` skill in Claude Code — it runs a short scoping interview, then runs autonomously.
 
-Invoke the `cih` skill in Claude Code (`.claude/skills/cih/SKILL.md`) with the target repo and
-state dir. The skill renders the same agent contracts and orchestration steps, delegating to the
-Agent/Task tools instead of `claude -p`.
+## Why it's safe to leave running
 
-Before the loop starts, the skill runs a short **Q&A scoping interview** to fill `run.json`. A
-`--depth` flag caps how many questions it asks:
-
-| `--depth` | question budget |
-|-----------|-----------------|
-| `low`     | up to 3         |
-| `medium`  | up to 6 (default) |
-| `high`    | up to 10        |
-
-It asks one question at a time about *intent only* (`focus_areas`, `mode` + caps,
-`value_threshold`), stops early once it understands the goal, shows a summary for a single
-confirmation, then runs **fully autonomously** with no further interruptions. `--depth` itself
-is never written to `run.json`.
-
-## Visual report
-
-Generate a self-contained HTML view of a run's state:
-
-```bash
-python -m cih.report --state-dir /abs/path/to/state   # writes <state_dir>/report.html
-```
-
-Or pass `--report` to the runner to (re)write `report.html` after every iteration; open it in a
-browser — it auto-refreshes while the run is `in_progress` and stops once it's `done`/`failed`.
-The page is fully self-contained (inline CSS, no network) and read-only over the state directory.
-
-## Safety
-
-- The harness **never pushes** and **never uses `git add -A`** — staging is explicit-only and
-  the bypass is structurally unreachable, not merely discouraged.
-- `target_repo` and `state_dir` are absolute, distinct, and non-nested; state lives **outside**
-  the target repo, so agents can never stage harness artifacts.
-- All work happens in disposable per-team worktrees; the target's working tree is never dirtied.
-- Every git command is logged.
+- **Improvements are proven, not asserted** — the TDD verifier independently confirms red→green
+  with the full suite passing; it hard-blocks skip markers and flags weak assertions.
+- **Can't push or bulk-stage** — `git push`, `git remote`, and `git add -A/--all/.` are
+  structurally unreachable; forbidden paths (`secrets/`, `*.pem`, `*.key`) are rejected.
+- **Never touches your tree** — all work happens in disposable worktrees; state lives outside the
+  target repo and every git command is logged.
 
 ## Tests
 
@@ -118,4 +73,5 @@ The page is fully self-contained (inline CSS, no network) and read-only over the
 python -m pytest -q
 ```
 
-> Design specs and implementation plans live locally under `docs/superpowers/` (untracked).
+> Full config lives in `RunConfig` (`cih/config.py`); role prompts in `.claude/agents/`.
+</content>
