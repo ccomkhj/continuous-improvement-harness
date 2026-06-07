@@ -1,11 +1,14 @@
 # cih/roles.py
 import re
-from pathlib import Path
+from importlib.resources import files
 from cih.contracts import AgentContract
 
 ROLE_NAMES = ["high-planner", "planner", "plan-reviewer", "executor", "execution-reviewer"]
 
-_AGENTS_DIR = Path(__file__).resolve().parent.parent / ".claude" / "agents"
+# Agent prompts ship as package data so the pip-installed CLI works with no
+# repo-level .claude/ directory present (the repo's .claude/agents/*.md are
+# symlinks back to these files).
+_AGENTS_DIR = files("cih") / "_assets" / "agents"
 
 _OUTPUT_SCHEMAS = {
     "high-planner": {
@@ -48,7 +51,7 @@ _OUTPUT_SCHEMAS = {
 def _strip_frontmatter(text: str) -> str:
     return re.sub(r"^---\n.*?\n---\n", "", text, count=1, flags=re.DOTALL).strip()
 
-def load_contracts(agents_dir: Path = _AGENTS_DIR) -> dict[str, AgentContract]:
+def load_contracts(agents_dir=_AGENTS_DIR) -> dict[str, AgentContract]:
     contracts = {}
     for name in ROLE_NAMES:
         body = _strip_frontmatter((agents_dir / f"{name}.md").read_text())

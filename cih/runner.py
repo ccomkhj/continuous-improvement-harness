@@ -65,9 +65,26 @@ def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1", report: bo
                         team_runner_fn=team_runner, integrate_fn=integrate_fn,
                         run_id=run_id, on_iteration_end=on_iter)
 
+def install_skill_cmd(argv: list[str]) -> int:
+    from cih.install import install_skill, DEFAULT_DEST
+    p = argparse.ArgumentParser(
+        prog="cih install-skill",
+        description="Install the interactive cih skill + agents into a Claude Code config dir")
+    p.add_argument("--dest", default=str(DEFAULT_DEST),
+                   help=f"Claude config dir to install into (default: {DEFAULT_DEST})")
+    ns = p.parse_args(argv)
+    written = install_skill(ns.dest)
+    print(f"cih: installed skill + {len(written) - 1} agents into {ns.dest}")
+    for path in written:
+        print(f"  {path}")
+    return 0
+
 def main(argv: list[str] | None = None) -> int:
     from cih.agents import ClaudeCliRunner
-    ns = parse_args(argv if argv is not None else sys.argv[1:])
+    argv = argv if argv is not None else sys.argv[1:]
+    if argv and argv[0] == "install-skill":
+        return install_skill_cmd(argv[1:])
+    ns = parse_args(argv)
     cfg = build_config(ns)
     runner = ClaudeCliRunner(cwd=cfg.target_repo)
     orch = build_orchestrator(cfg, runner, report=ns.report)

@@ -40,5 +40,8 @@ version = { attr = "cih.__version__" }
 [tool.setuptools.packages.find]
 include = ["cih*"]
 
+[tool.setuptools.package-data]
+cih = ["_assets/agents/*.md", "_assets/skill/SKILL.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

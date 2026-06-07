@@ -60,8 +60,30 @@ cih --mode until-converged \
 `cih …` is equivalent to `python -m cih.runner …`.
 
 `target-repo` and `state-dir` must be absolute, distinct, and non-nested. Add `--report` to write
-a self-contained `report.html` after every iteration. For the interactive version, invoke the
-`cih` skill in Claude Code — it runs a short scoping interview, then runs autonomously.
+a self-contained `report.html` after every iteration.
+
+## Use it in another repo
+
+**Headless** — no setup beyond the install. From anywhere, point `--target-repo` at the repo
+you want to improve and keep `--state-dir` *outside* it:
+
+```bash
+pip install cih-agent
+cih --mode fixed-N --iterations 3 \
+  --target-repo /abs/path/to/your-repo \
+  --state-dir   /abs/path/to/your-repo-cih-state   # outside the target repo
+```
+
+**Interactive (`/cih` skill).** The skill and its agents aren't auto-installed by pip (Claude
+Code loads them from `.claude/`, not from site-packages). Install them once, then invoke `/cih`
+inside a Claude Code session:
+
+```bash
+cih install-skill                       # installs into ~/.claude (available in every repo)
+cih install-skill --dest /path/to/your-repo/.claude   # or scope to one repo
+```
+
+The interactive skill runs a short scoping interview, then runs autonomously.
 
 ## Why it's safe to leave running
 
