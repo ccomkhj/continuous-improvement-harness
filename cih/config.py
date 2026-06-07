@@ -8,6 +8,20 @@ class ConfigError(Exception):
 
 _MODES = {"fixed-N", "until-converged"}
 
+DEPTH_BUDGET = {"low": 3, "medium": 6, "high": 10}
+DEFAULT_DEPTH = "medium"
+
+
+def depth_budget(name: Optional[str] = None) -> int:
+    """Map a --depth name to its question budget (upper bound). None → default."""
+    if name is None:
+        name = DEFAULT_DEPTH
+    if name not in DEPTH_BUDGET:
+        raise ConfigError(
+            f"depth must be one of {sorted(DEPTH_BUDGET)} (got {name!r})"
+        )
+    return DEPTH_BUDGET[name]
+
 @dataclass
 class RunConfig:
     mode: str

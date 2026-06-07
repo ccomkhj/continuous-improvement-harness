@@ -1,5 +1,5 @@
 import pytest
-from cih.config import RunConfig, ConfigError
+from cih.config import RunConfig, ConfigError, depth_budget, DEPTH_BUDGET, DEFAULT_DEPTH
 
 def test_valid_config(tmp_path):
     target = tmp_path / "target"; state = tmp_path / "state"
@@ -58,3 +58,20 @@ def test_roundtrip_to_dict(tmp_path):
     d = cfg.to_dict()
     assert d["focus_areas"] == ["tests"]
     assert RunConfig.from_dict(d).focus_areas == ["tests"]
+
+def test_depth_budget_values():
+    assert depth_budget("low") == 3
+    assert depth_budget("medium") == 6
+    assert depth_budget("high") == 10
+
+def test_depth_budget_default():
+    assert DEFAULT_DEPTH == "medium"
+    assert depth_budget(None) == 6
+    assert depth_budget(DEFAULT_DEPTH) == 6
+
+def test_depth_budget_rejects_unknown():
+    with pytest.raises(ConfigError):
+        depth_budget("deep")
+
+def test_depth_budget_map_exact():
+    assert DEPTH_BUDGET == {"low": 3, "medium": 6, "high": 10}
