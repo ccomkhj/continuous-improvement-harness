@@ -70,7 +70,7 @@ def test_depth_budget_default():
     assert depth_budget(DEFAULT_DEPTH) == 6
 
 def test_depth_budget_rejects_unknown():
-    with pytest.raises(ConfigError):
+    with pytest.raises(ConfigError, match=r"low.*medium.*high"):
         depth_budget("deep")
 
 def test_depth_budget_map_exact():

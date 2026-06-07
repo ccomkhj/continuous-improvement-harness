@@ -18,9 +18,10 @@ def depth_budget(name: Optional[str] = None) -> int:
         name = DEFAULT_DEPTH
     if name not in DEPTH_BUDGET:
         raise ConfigError(
-            f"depth must be one of {sorted(DEPTH_BUDGET)} (got {name!r})"
+            f"depth must be one of {sorted(DEPTH_BUDGET, key=DEPTH_BUDGET.__getitem__)} (got {name!r})"
         )
     return DEPTH_BUDGET[name]
+
 
 @dataclass
 class RunConfig:

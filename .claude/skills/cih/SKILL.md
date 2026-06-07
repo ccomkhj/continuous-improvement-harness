@@ -12,7 +12,7 @@ defined in `.claude/agents/`. State lives under an absolute `state_dir` OUTSIDE 
   args** — never asked in the Q&A.
 - `--depth low|medium|high` controls the scoping question budget: `low`=3, `medium`=6,
   `high`=10. Default `medium`. Resolve it with `cih.config.depth_budget(name)`, which raises
-  `ConfigError` on an unknown value — surface that and stop before asking anything.
+  `ConfigError` on an unknown value — surface that and stop before asking anything. `--depth` governs only this scoping phase; it is never written to `run.json`.
 
 ## Scoping phase (interactive — skill only)
 
