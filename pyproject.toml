@@ -12,7 +12,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Huijo Kim", email = "huijo.kim@voids.ai" }]
 keywords = ["agents", "tdd", "code-improvement", "claude", "automation"]
-dependencies = ["jsonschema>=4.0"]
+dependencies = ["jsonschema>=4.0", "questionary>=2.0"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
