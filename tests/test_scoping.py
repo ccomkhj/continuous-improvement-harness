@@ -1,6 +1,6 @@
 import pytest
 from cih import scoping
-from cih.scoping import StubAsker, _to_choices
+from cih.scoping import StubAsker, _to_choices, _ask_positive_int
 
 
 def test_to_choices_maps_label_value_pairs():
@@ -24,3 +24,20 @@ def test_stub_asker_records_notes_without_consuming_answers():
     asker.note("world")
     assert asker.notes == ["hello", "world"]
     assert asker.select("m?", []) == "only"
+
+
+def test_ask_positive_int_accepts_valid():
+    asker = StubAsker(["3"])
+    assert _ask_positive_int(asker, "n?", 5) == 3
+
+
+def test_ask_positive_int_reasks_on_non_numeric_then_accepts():
+    asker = StubAsker(["abc", "4"])
+    assert _ask_positive_int(asker, "n?", 5) == 4
+    assert any("whole number" in n for n in asker.notes)
+
+
+def test_ask_positive_int_reasks_on_zero_or_negative():
+    asker = StubAsker(["0", "-2", "7"])
+    assert _ask_positive_int(asker, "n?", 5) == 7
+    assert any("positive" in n for n in asker.notes)

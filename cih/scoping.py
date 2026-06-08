@@ -45,3 +45,17 @@ class StubAsker:
 
     def note(self, message):
         self.notes.append(message)
+
+
+def _ask_positive_int(asker: Asker, message: str, default: int) -> int:
+    while True:
+        raw = asker.text(message, default=str(default))
+        try:
+            value = int(str(raw).strip())
+        except (TypeError, ValueError):
+            asker.note(f"Please enter a whole number (got {raw!r}).")
+            continue
+        if value <= 0:
+            asker.note("Please enter a positive number.")
+            continue
+        return value
