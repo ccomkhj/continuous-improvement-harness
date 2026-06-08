@@ -59,3 +59,60 @@ def _ask_positive_int(asker: Asker, message: str, default: int) -> int:
             asker.note("Please enter a positive number.")
             continue
         return value
+
+
+MODE_CHOICES = [
+    ("Fixed number of iterations", "fixed-N"),
+    ("Run until converged", "until-converged"),
+]
+FOCUS_PRESETS = ["tests", "performance", "security", "documentation", "types", "refactor"]
+VALUE_CHOICES = [
+    ("Conservative (0.7) — only high-value opportunities", 0.7),
+    ("Balanced (0.5) — default", 0.5),
+    ("Aggressive (0.3) — more, smaller wins", 0.3),
+]
+
+
+def _summary(target_repo, state_dir, mode, iterations, max_iterations, focus_areas, value_threshold) -> str:
+    bound = f"iterations={iterations}" if mode == "fixed-N" else f"max_iterations={max_iterations}"
+    focus = ", ".join(focus_areas) if focus_areas else "(broad audit)"
+    return (
+        "Planned run:\n"
+        f"  target_repo:     {target_repo}\n"
+        f"  state_dir:       {state_dir}\n"
+        f"  mode:            {mode} ({bound})\n"
+        f"  focus_areas:     {focus}\n"
+        f"  value_threshold: {value_threshold}"
+    )
+
+
+def run_scoping_interview(target_repo: str, state_dir: str, asker: Asker) -> RunConfig:
+    # Fail fast on bad paths BEFORE asking anything — the interview cannot fix them.
+    RunConfig._validate_paths(target_repo, state_dir)
+
+    while True:
+        mode = asker.select("Run mode?", MODE_CHOICES, default="until-converged")
+        iterations = None
+        max_iterations = 25
+        if mode == "fixed-N":
+            iterations = _ask_positive_int(asker, "How many iterations?", 3)
+        else:
+            max_iterations = _ask_positive_int(asker, "Max iterations (safety cap)?", 25)
+
+        selected = asker.checkbox("Focus areas (space to toggle, enter to accept — optional)?",
+                                  [(f, f) for f in FOCUS_PRESETS])
+        extra = asker.text("Other focus areas (comma-separated, optional)?", default="")
+        focus_areas = list(selected) + [s.strip() for s in extra.split(",") if s.strip()]
+
+        value_threshold = asker.select("How aggressive should it be?", VALUE_CHOICES, default=0.5)
+
+        asker.note(_summary(target_repo, state_dir, mode, iterations,
+                            max_iterations, focus_areas, value_threshold))
+        if not asker.confirm("Go ahead with this run?", default=True):
+            asker.note("Okay — let's redo the scoping.")
+            continue
+
+        return RunConfig.create(
+            mode=mode, iterations=iterations, max_iterations=max_iterations,
+            target_repo=target_repo, state_dir=state_dir,
+            focus_areas=focus_areas, value_threshold=value_threshold)

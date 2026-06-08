@@ -1,6 +1,7 @@
 import pytest
 from cih import scoping
 from cih.scoping import StubAsker, _to_choices, _ask_positive_int
+from cih.config import ConfigError
 
 
 def test_to_choices_maps_label_value_pairs():
@@ -41,3 +42,57 @@ def test_ask_positive_int_reasks_on_zero_or_negative():
     asker = StubAsker(["0", "-2", "7"])
     assert _ask_positive_int(asker, "n?", 5) == 7
     assert any("positive" in n for n in asker.notes)
+
+
+from cih.scoping import run_scoping_interview
+
+
+def _abs(tmp_path, name):
+    p = tmp_path / name
+    p.mkdir()
+    return str(p)
+
+
+def test_interview_fixed_n(tmp_path):
+    t, s = _abs(tmp_path, "t"), _abs(tmp_path, "s")
+    asker = StubAsker(["fixed-N", "3", ["tests"], "", 0.5, True])
+    cfg = run_scoping_interview(t, s, asker)
+    assert cfg.mode == "fixed-N"
+    assert cfg.iterations == 3
+    assert cfg.focus_areas == ["tests"]
+    assert cfg.value_threshold == 0.5
+
+
+def test_interview_until_converged_sets_max_not_iterations(tmp_path):
+    t, s = _abs(tmp_path, "t"), _abs(tmp_path, "s")
+    asker = StubAsker(["until-converged", "10", [], "", 0.7, True])
+    cfg = run_scoping_interview(t, s, asker)
+    assert cfg.mode == "until-converged"
+    assert cfg.iterations is None
+    assert cfg.max_iterations == 10
+    assert cfg.value_threshold == 0.7
+
+
+def test_interview_merges_preset_and_other_focus(tmp_path):
+    t, s = _abs(tmp_path, "t"), _abs(tmp_path, "s")
+    asker = StubAsker(["fixed-N", "1", ["tests", "security"], "logging, caching", 0.3, True])
+    cfg = run_scoping_interview(t, s, asker)
+    assert cfg.focus_areas == ["tests", "security", "logging", "caching"]
+
+
+def test_interview_confirm_no_then_yes_loops_once(tmp_path):
+    t, s = _abs(tmp_path, "t"), _abs(tmp_path, "s")
+    asker = StubAsker([
+        "fixed-N", "1", ["tests"], "", 0.5, False,
+        "until-converged", "9", [], "", 0.3, True,
+    ])
+    cfg = run_scoping_interview(t, s, asker)
+    assert cfg.mode == "until-converged"
+    assert cfg.max_iterations == 9
+
+
+def test_interview_validates_paths_up_front(tmp_path):
+    same = _abs(tmp_path, "same")
+    asker = StubAsker([])
+    with pytest.raises(ConfigError):
+        run_scoping_interview(same, same, asker)
