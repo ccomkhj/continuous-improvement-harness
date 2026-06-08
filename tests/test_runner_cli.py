@@ -208,3 +208,18 @@ def test_main_interactive_requires_tty(tmp_path, monkeypatch):
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     with pytest.raises(ConfigError, match="needs a TTY"):
         main(["--target-repo", str(repo), "--state-dir", str(state)])
+
+
+def test_main_interactive_clean_exit_on_cancel(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    state = tmp_path / "state"; state.mkdir()
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+    def _cancel(*a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("cih.scoping.run_scoping_interview", _cancel)
+    code = main(["--target-repo", str(repo), "--state-dir", str(state)])
+    assert code == 130
+    err = capsys.readouterr().err
+    assert "cancel" in err.lower()

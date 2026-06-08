@@ -103,7 +103,11 @@ def main(argv: list[str] | None = None) -> int:
             raise ConfigError(
                 "interactive scoping needs a TTY — pass --non-interactive to run from flags")
         from cih.scoping import QuestionaryAsker, run_scoping_interview
-        cfg = run_scoping_interview(ns.target_repo, ns.state_dir, QuestionaryAsker())
+        try:
+            cfg = run_scoping_interview(ns.target_repo, ns.state_dir, QuestionaryAsker())
+        except KeyboardInterrupt:
+            print("cih: scoping cancelled.", file=sys.stderr)
+            return 130
 
     runner = ClaudeCliRunner(cwd=cfg.target_repo)
     orch = build_orchestrator(cfg, runner, report=ns.report)

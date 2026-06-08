@@ -117,3 +117,21 @@ def test_questionary_asker_returns_answer(monkeypatch):
     asker = QuestionaryAsker()
     monkeypatch.setattr("questionary.confirm", lambda *a, **k: _FakeQuestion(True))
     assert asker.confirm("ok?") is True
+
+
+def test_interview_summary_note_reflects_mode_and_focus(tmp_path):
+    t, s = _abs(tmp_path, "t"), _abs(tmp_path, "s")
+    asker = StubAsker(["fixed-N", "3", ["tests"], "", 0.5, True])
+    run_scoping_interview(t, s, asker)
+    summary = "\n".join(asker.notes)
+    assert "iterations=3" in summary
+    assert "tests" in summary
+
+
+def test_interview_summary_broad_audit_when_no_focus(tmp_path):
+    t, s = _abs(tmp_path, "t"), _abs(tmp_path, "s")
+    asker = StubAsker(["until-converged", "5", [], "", 0.5, True])
+    run_scoping_interview(t, s, asker)
+    summary = "\n".join(asker.notes)
+    assert "max_iterations=5" in summary
+    assert "(broad audit)" in summary

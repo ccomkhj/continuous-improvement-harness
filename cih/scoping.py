@@ -129,7 +129,7 @@ class QuestionaryAsker:
         return answer
 
     def select(self, message, choices, default=None):
-        return self._resolve(questionary.select(message, choices=_to_choices(choices)))
+        return self._resolve(questionary.select(message, choices=_to_choices(choices), default=default))
 
     def checkbox(self, message, choices):
         return self._resolve(questionary.checkbox(message, choices=_to_choices(choices)))
