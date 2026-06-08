@@ -5,21 +5,27 @@ from cih.config import RunConfig
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="cih", description="Continuous Improvement Harness")
-    p.add_argument("--mode", required=True, choices=["fixed-N", "until-converged"])
+    p.add_argument("--mode", choices=["fixed-N", "until-converged"])
     p.add_argument("--iterations", type=int, default=None)
     p.add_argument("--target-repo", required=True)
     p.add_argument("--state-dir", required=True)
     p.add_argument("--focus", action="append", default=[], dest="focus_areas")
+    p.add_argument("--value-threshold", type=float, default=0.5, dest="value_threshold")
     p.add_argument("--max-iterations", type=int, default=25)
     p.add_argument("--report", action="store_true",
                    help="write/update report.html each iteration")
+    p.add_argument("--non-interactive", "--yes", action="store_true", dest="non_interactive",
+                   help="skip the scoping interview and build the run from flags (requires --mode)")
     return p.parse_args(argv)
 
 def build_config(ns: argparse.Namespace) -> RunConfig:
+    if ns.mode is None:
+        from cih.config import ConfigError
+        raise ConfigError("--mode is required in --non-interactive mode")
     return RunConfig.create(
         mode=ns.mode, iterations=ns.iterations, target_repo=ns.target_repo,
         state_dir=ns.state_dir, focus_areas=ns.focus_areas,
-        max_iterations=ns.max_iterations)
+        value_threshold=ns.value_threshold, max_iterations=ns.max_iterations)
 
 def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1", report: bool = False):
     """Assemble a fully-wired Orchestrator from a config and an agent runner.
