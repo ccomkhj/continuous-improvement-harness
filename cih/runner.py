@@ -4,7 +4,10 @@ from pathlib import Path
 from cih.config import RunConfig
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="cih", description="Continuous Improvement Harness")
+    p = argparse.ArgumentParser(
+        prog="cih",
+        description="Continuous Improvement Harness — interactive by default; "
+                    "use --non-interactive (with --mode) for scripted/CI runs.")
     p.add_argument("--mode", choices=["fixed-N", "until-converged"])
     p.add_argument("--iterations", type=int, default=None)
     p.add_argument("--target-repo", required=True)
@@ -19,7 +22,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 def build_config(ns: argparse.Namespace) -> RunConfig:
-    if ns.mode is None:
+    if ns.mode is None and ns.non_interactive:
         from cih.config import ConfigError
         raise ConfigError("--mode is required in --non-interactive mode")
     return RunConfig.create(
