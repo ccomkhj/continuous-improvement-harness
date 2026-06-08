@@ -4,22 +4,31 @@ from pathlib import Path
 from cih.config import RunConfig
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="cih", description="Continuous Improvement Harness")
-    p.add_argument("--mode", required=True, choices=["fixed-N", "until-converged"])
+    p = argparse.ArgumentParser(
+        prog="cih",
+        description="Continuous Improvement Harness — interactive by default; "
+                    "use --non-interactive (with --mode) for scripted/CI runs.")
+    p.add_argument("--mode", choices=["fixed-N", "until-converged"])
     p.add_argument("--iterations", type=int, default=None)
     p.add_argument("--target-repo", required=True)
     p.add_argument("--state-dir", required=True)
     p.add_argument("--focus", action="append", default=[], dest="focus_areas")
+    p.add_argument("--value-threshold", type=float, default=0.5, dest="value_threshold")
     p.add_argument("--max-iterations", type=int, default=25)
     p.add_argument("--report", action="store_true",
                    help="write/update report.html each iteration")
+    p.add_argument("--non-interactive", "--yes", action="store_true", dest="non_interactive",
+                   help="skip the scoping interview and build the run from flags (requires --mode)")
     return p.parse_args(argv)
 
 def build_config(ns: argparse.Namespace) -> RunConfig:
+    if ns.mode is None and ns.non_interactive:
+        from cih.config import ConfigError
+        raise ConfigError("--mode is required in --non-interactive mode")
     return RunConfig.create(
         mode=ns.mode, iterations=ns.iterations, target_repo=ns.target_repo,
         state_dir=ns.state_dir, focus_areas=ns.focus_areas,
-        max_iterations=ns.max_iterations)
+        value_threshold=ns.value_threshold, max_iterations=ns.max_iterations)
 
 def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1", report: bool = False):
     """Assemble a fully-wired Orchestrator from a config and an agent runner.
@@ -81,11 +90,25 @@ def install_skill_cmd(argv: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     from cih.agents import ClaudeCliRunner
+    from cih.config import ConfigError
     argv = argv if argv is not None else sys.argv[1:]
     if argv and argv[0] == "install-skill":
         return install_skill_cmd(argv[1:])
     ns = parse_args(argv)
-    cfg = build_config(ns)
+
+    if ns.non_interactive:
+        cfg = build_config(ns)
+    else:
+        if not sys.stdin.isatty():
+            raise ConfigError(
+                "interactive scoping needs a TTY — pass --non-interactive to run from flags")
+        from cih.scoping import QuestionaryAsker, run_scoping_interview
+        try:
+            cfg = run_scoping_interview(ns.target_repo, ns.state_dir, QuestionaryAsker())
+        except KeyboardInterrupt:
+            print("cih: scoping cancelled.", file=sys.stderr)
+            return 130
+
     runner = ClaudeCliRunner(cwd=cfg.target_repo)
     orch = build_orchestrator(cfg, runner, report=ns.report)
     summary = orch.run()

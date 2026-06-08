@@ -1,9 +1,9 @@
 import subprocess
 import pytest
 from pathlib import Path
-from cih.runner import parse_args, build_config, build_orchestrator
+from cih.runner import parse_args, build_config, build_orchestrator, main
 from cih.agents import StubRunner
-from cih.config import RunConfig
+from cih.config import RunConfig, ConfigError
 from cih.safety import assert_clean_tree, GitError
 
 def test_parse_args_fixed_n(tmp_path):
@@ -160,3 +160,66 @@ def test_build_orchestrator_report_emits_html(tmp_path):
     text = report.read_text()
     assert ">done<" in text
     assert 'http-equiv="refresh"' not in text
+
+
+def test_parse_args_mode_optional_for_interactive(tmp_path):
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    ns = parse_args(["--target-repo", str(t), "--state-dir", str(s)])
+    assert ns.mode is None
+    assert ns.non_interactive is False
+
+
+def test_parse_args_non_interactive_flag(tmp_path):
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    ns = parse_args(["--mode", "until-converged", "--target-repo", str(t),
+                     "--state-dir", str(s), "--non-interactive"])
+    assert ns.non_interactive is True
+
+
+def test_parse_args_yes_is_alias_for_non_interactive(tmp_path):
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    ns = parse_args(["--mode", "until-converged", "--target-repo", str(t),
+                     "--state-dir", str(s), "--yes"])
+    assert ns.non_interactive is True
+
+
+def test_build_config_requires_mode_when_non_interactive(tmp_path):
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    ns = parse_args(["--target-repo", str(t), "--state-dir", str(s), "--non-interactive"])
+    with pytest.raises(ConfigError, match="--mode is required"):
+        build_config(ns)
+
+
+def test_build_config_non_interactive_parity(tmp_path):
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    ns = parse_args(["--mode", "fixed-N", "--iterations", "2",
+                     "--target-repo", str(t), "--state-dir", str(s),
+                     "--focus", "tests", "--value-threshold", "0.7", "--non-interactive"])
+    cfg = build_config(ns)
+    assert cfg.mode == "fixed-N"
+    assert cfg.iterations == 2
+    assert cfg.focus_areas == ["tests"]
+    assert cfg.value_threshold == 0.7
+
+
+def test_main_interactive_requires_tty(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    state = tmp_path / "state"; state.mkdir()
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    with pytest.raises(ConfigError, match="needs a TTY"):
+        main(["--target-repo", str(repo), "--state-dir", str(state)])
+
+
+def test_main_interactive_clean_exit_on_cancel(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    state = tmp_path / "state"; state.mkdir()
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+    def _cancel(*a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("cih.scoping.run_scoping_interview", _cancel)
+    code = main(["--target-repo", str(repo), "--state-dir", str(state)])
+    assert code == 130
+    err = capsys.readouterr().err
+    assert "cancel" in err.lower()

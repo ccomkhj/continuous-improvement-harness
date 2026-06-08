@@ -14,7 +14,7 @@
 A change only merges if a **non-LLM verifier proves** — by checking out the commits and running
 the tests itself — that a new test failed before the fix and passes after, with the full suite
 still green. Every team works in a disposable git worktree; `git push` and `git add -A` are
-blocked at the wrapper level. Runs as a headless CLI or an interactive Claude Code skill.
+blocked at the wrapper level. Runs as an interactive CLI (with a `--non-interactive` opt-out for CI/scripts) or as an interactive Claude Code skill.
 
 ## How it works
 
@@ -46,14 +46,13 @@ Requires Python 3.11+ and the [Claude Code CLI](https://docs.claude.com/en/docs/
 ```bash
 pip install cih-agent
 
-# exactly 3 iterations, focused on tests + performance
-cih --mode fixed-N --iterations 3 \
+# interactive by default — cih interviews you for scope, then runs autonomously
+cih --target-repo /abs/path/to/target --state-dir /abs/path/to/state
+
+# scripted / CI — skip the interview and drive everything from flags (requires --mode)
+cih --non-interactive --mode fixed-N --iterations 3 \
   --target-repo /abs/path/to/target --state-dir /abs/path/to/state \
   --focus tests --focus performance
-
-# or run until converged (bounded by --max-iterations)
-cih --mode until-converged \
-  --target-repo /abs/path/to/target --state-dir /abs/path/to/state
 ```
 
 `pip install cih-agent` installs the `cih` console command (the import name stays `cih`);
@@ -64,14 +63,22 @@ a self-contained `report.html` after every iteration.
 
 ## Use it in another repo
 
-**Headless** — no setup beyond the install. From anywhere, point `--target-repo` at the repo
-you want to improve and keep `--state-dir` *outside* it:
+**CLI (interactive by default).** No setup beyond the install. From anywhere, point
+`--target-repo` at the repo you want to improve and keep `--state-dir` *outside* it. The CLI
+runs a short scoping interview before proceeding; pass `--non-interactive` (alias `--yes`) to
+skip the interview for non-TTY/CI use (requires `--mode`):
 
 ```bash
 pip install cih-agent
-cih --mode fixed-N --iterations 3 \
+
+# interactive — cih asks for scope, then runs autonomously
+cih --target-repo /abs/path/to/your-repo \
+    --state-dir   /abs/path/to/your-repo-cih-state   # outside the target repo
+
+# non-interactive / CI — skip interview, drive entirely from flags
+cih --non-interactive --mode fixed-N --iterations 3 \
   --target-repo /abs/path/to/your-repo \
-  --state-dir   /abs/path/to/your-repo-cih-state   # outside the target repo
+  --state-dir   /abs/path/to/your-repo-cih-state
 ```
 
 **Interactive (`/cih` skill).** The skill and its agents aren't auto-installed by pip (Claude
@@ -83,7 +90,7 @@ cih install-skill                       # installs into ~/.claude (available in 
 cih install-skill --dest /path/to/your-repo/.claude   # or scope to one repo
 ```
 
-The interactive skill runs a short scoping interview, then runs autonomously.
+The skill runs a short scoping interview, then runs autonomously.
 
 ## Why it's safe to leave running
 
