@@ -87,11 +87,21 @@ def install_skill_cmd(argv: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     from cih.agents import ClaudeCliRunner
+    from cih.config import ConfigError
     argv = argv if argv is not None else sys.argv[1:]
     if argv and argv[0] == "install-skill":
         return install_skill_cmd(argv[1:])
     ns = parse_args(argv)
-    cfg = build_config(ns)
+
+    if ns.non_interactive:
+        cfg = build_config(ns)
+    else:
+        if not sys.stdin.isatty():
+            raise ConfigError(
+                "interactive scoping needs a TTY — pass --non-interactive to run from flags")
+        from cih.scoping import QuestionaryAsker, run_scoping_interview
+        cfg = run_scoping_interview(ns.target_repo, ns.state_dir, QuestionaryAsker())
+
     runner = ClaudeCliRunner(cwd=cfg.target_repo)
     orch = build_orchestrator(cfg, runner, report=ns.report)
     summary = orch.run()

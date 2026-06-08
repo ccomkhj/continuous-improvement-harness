@@ -1,7 +1,7 @@
 import subprocess
 import pytest
 from pathlib import Path
-from cih.runner import parse_args, build_config, build_orchestrator
+from cih.runner import parse_args, build_config, build_orchestrator, main
 from cih.agents import StubRunner
 from cih.config import RunConfig, ConfigError
 from cih.safety import assert_clean_tree, GitError
@@ -200,3 +200,11 @@ def test_build_config_non_interactive_parity(tmp_path):
     assert cfg.iterations == 2
     assert cfg.focus_areas == ["tests"]
     assert cfg.value_threshold == 0.7
+
+
+def test_main_interactive_requires_tty(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"; _seed_repo(repo)
+    state = tmp_path / "state"; state.mkdir()
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    with pytest.raises(ConfigError, match="needs a TTY"):
+        main(["--target-repo", str(repo), "--state-dir", str(state)])
