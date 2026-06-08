@@ -90,7 +90,9 @@ cih install-skill                       # installs into ~/.claude (available in 
 cih install-skill --dest /path/to/your-repo/.claude   # or scope to one repo
 ```
 
-The skill runs a short scoping interview, then runs autonomously.
+The skill runs a short scoping interview, writes a `run.json`, then hands the run off to a
+fresh Superset workspace that executes it headless (`cih --from-run-json …`) — so the long
+autonomous run lives in its own workspace, not the scoping session.
 
 ## Why it's safe to leave running
 
