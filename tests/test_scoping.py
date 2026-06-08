@@ -44,7 +44,7 @@ def test_ask_positive_int_reasks_on_zero_or_negative():
     assert any("positive" in n for n in asker.notes)
 
 
-from cih.scoping import run_scoping_interview
+from cih.scoping import run_scoping_interview, QuestionaryAsker
 
 
 def _abs(tmp_path, name):
@@ -96,3 +96,24 @@ def test_interview_validates_paths_up_front(tmp_path):
     asker = StubAsker([])
     with pytest.raises(ConfigError):
         run_scoping_interview(same, same, asker)
+
+
+class _FakeQuestion:
+    def __init__(self, answer):
+        self._answer = answer
+
+    def ask(self):
+        return self._answer
+
+
+def test_questionary_asker_raises_on_cancel(monkeypatch):
+    asker = QuestionaryAsker()
+    monkeypatch.setattr("questionary.text", lambda *a, **k: _FakeQuestion(None))
+    with pytest.raises(KeyboardInterrupt):
+        asker.text("anything?")
+
+
+def test_questionary_asker_returns_answer(monkeypatch):
+    asker = QuestionaryAsker()
+    monkeypatch.setattr("questionary.confirm", lambda *a, **k: _FakeQuestion(True))
+    assert asker.confirm("ok?") is True

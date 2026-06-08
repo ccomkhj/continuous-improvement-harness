@@ -116,3 +116,29 @@ def run_scoping_interview(target_repo: str, state_dir: str, asker: Asker) -> Run
             mode=mode, iterations=iterations, max_iterations=max_iterations,
             target_repo=target_repo, state_dir=state_dir,
             focus_areas=focus_areas, value_threshold=value_threshold)
+
+
+class QuestionaryAsker:
+    """Real Asker over questionary. Cancel (Ctrl-C / ESC -> None) raises KeyboardInterrupt."""
+
+    @staticmethod
+    def _resolve(question):
+        answer = question.ask()
+        if answer is None:
+            raise KeyboardInterrupt("scoping interview cancelled")
+        return answer
+
+    def select(self, message, choices, default=None):
+        return self._resolve(questionary.select(message, choices=_to_choices(choices)))
+
+    def checkbox(self, message, choices):
+        return self._resolve(questionary.checkbox(message, choices=_to_choices(choices)))
+
+    def text(self, message, default=""):
+        return self._resolve(questionary.text(message, default=default))
+
+    def confirm(self, message, default=True):
+        return self._resolve(questionary.confirm(message, default=default))
+
+    def note(self, message):
+        questionary.print(message)
