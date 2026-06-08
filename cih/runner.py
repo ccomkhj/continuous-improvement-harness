@@ -13,6 +13,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--target-repo", default=None)
     p.add_argument("--state-dir", default=None)
     p.add_argument("--focus", action="append", default=[], dest="focus_areas")
+    p.add_argument("--brief", default="",
+                   help="free-form brief (surface, hotspot, success/proof bar, guardrails) — "
+                        "the high-signal steer the high-planner audit reads")
     p.add_argument("--value-threshold", type=float, default=0.5, dest="value_threshold")
     p.add_argument("--max-iterations", type=int, default=25)
     p.add_argument("--report", action="store_true",
@@ -69,7 +72,7 @@ def build_config(ns: argparse.Namespace) -> RunConfig:
         raise ConfigError("--mode is required in --non-interactive mode")
     return RunConfig.create(
         mode=ns.mode, iterations=ns.iterations, target_repo=ns.target_repo,
-        state_dir=ns.state_dir, focus_areas=ns.focus_areas,
+        state_dir=ns.state_dir, focus_areas=ns.focus_areas, brief=ns.brief,
         value_threshold=ns.value_threshold, max_iterations=ns.max_iterations)
 
 def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1", report: bool = False):

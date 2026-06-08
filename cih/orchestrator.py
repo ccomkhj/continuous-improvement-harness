@@ -78,7 +78,7 @@ class Orchestrator:
 
                 i = iterations_run + 1
                 ctx = {"iteration": i, "target_repo": self.cfg.target_repo,
-                       "focus_areas": self.cfg.focus_areas,
+                       "focus_areas": self.cfg.focus_areas, "brief": self.cfg.brief,
                        "ledger": self.ledger.to_dict()}
                 audit = self.high_planner_fn(ctx)
                 self._ingest_opportunities(audit)

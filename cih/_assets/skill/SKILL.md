@@ -34,25 +34,42 @@ these in the Q&A. Surface the inferred values in the scoping summary so the user
 ## Scoping phase (interactive — this session only)
 
 Runs ONCE, here. The headless runner does NOT do this; it consumes the `run.json` you produce.
+An autonomous run is expensive and runs unattended — **invest in rigorous, specific questions
+so you understand the run fully before launching.** Surface params alone (three quick questions)
+are NOT enough; under-scoping wastes a long run on the wrong thing.
 
-1. Resolve the question budget `B` from `--depth` (default `medium` → 6).
-2. Interview the user for the **intent params only**, asking **one `AskUserQuestion` at a
-   time**, multiple-choice where possible:
-   - `focus_areas` — what to audit/improve in the target.
-   - `mode` — `fixed-N` (then `iterations`) vs `until-converged`, plus optional
-     `max_iterations` / `budget_cap`.
-   - `value_threshold` — how aggressive to be (default `0.5`).
-   Spend questions on what you do NOT already know from the invocation. Ask at most `B`
-   questions and **stop early** as soon as every required intent param is confidently known —
-   do not pad to `B`.
+0. **Ground yourself first — never ask blind.** Read the repo's top-level layout, test setup
+   (`pyproject.toml`/`tox`/CI), and any benchmark/lint config; skim the areas the user names.
+   Use what you learn to make every question concrete and repo-specific (offer the *real* module
+   names and *real* candidate hotspots as options), not generic.
+1. Resolve the question budget `B` from `--depth` (low=3, medium=6, high=10; default `medium`).
+   Treat `B` as a **target for thoroughness, not a cap to dodge.** Keep asking until you
+   genuinely understand the run, then stop — don't stop at the first three answers.
+2. Interview the user **one `AskUserQuestion` at a time**, multiple-choice with concrete
+   repo-grounded options, and **branch on answers** (a "known slow path" answer → next ask
+   *which* path; a subsystem answer → ask *which* entrypoint/function). Cover, until each is
+   concrete, at minimum:
+   - **focus_areas** — the kind(s) of improvement (tests / performance / types / cleanup / …).
+   - **surface** — which subsystem(s) / dirs are in scope; name them from the layout.
+   - **motivation** — a specific known pain/hotspot, or audit-driven discovery? If specific,
+     pin down exactly where and why.
+   - **success & proof** — how a change earns its keep. The TDD gate is **pytest correctness,
+     not speed**; if the user wants *measured* wins, the run must add benchmarks — surface that
+     constraint and confirm the proof bar (behavior-identical refactor vs measured benchmark).
+   - **guardrails** — invariants/off-limits (public API, schemas, DB/query semantics, deps).
+   - **mode** — `fixed-N` (then `iterations`) vs `until-converged` (+ `max_iterations` /
+     `budget_cap`); and **value_threshold** (how aggressive; default `0.5`).
 3. Leave every other `run.json` field at its `cih.config.RunConfig` default (retries, team
    count, cooldown, `tdd_adapter`, `convergence_dry_streak`, …). Do NOT ask about them.
-4. Present a summary that includes both the **inferred inputs** (target_repo, Superset project,
-   state_dir) and the **scoped run** (goal/focus_areas, mode + caps, value_threshold), and ask a
-   **single** "go ahead?" confirmation — e.g. "Target: voidsapi · State:
-   ~/.superset/cih-state/voidsapi · until-converged, focus tests+perf — go ahead?". If the user
-   declines, let them adjust (including the inferred inputs), then re-summarize. On "yes",
-   proceed to **Hand-off**.
+4. **Synthesize the answers into the run config:**
+   - `focus_areas` — the kinds of improvement (short tags).
+   - `brief` — a tight prose paragraph capturing **surface, motivation/hotspot, the success &
+     proof bar, and guardrails**, in the user's own terms. This is the high-signal steer the
+     high-planner audit treats as binding — do not drop the detail you gathered.
+5. Present a summary that includes the **inferred inputs** (target_repo, Superset project,
+   state_dir), the **brief**, and the **scoped run** (focus_areas, mode + caps, value_threshold),
+   and ask a **single** "go ahead?" confirmation. If the user declines, let them adjust (any
+   answer or inferred input), then re-summarize. On "yes", proceed to **Hand-off**.
 
 ## Hand-off (on "go ahead?")
 
@@ -70,7 +87,7 @@ questions and do not drive the loop in this session.
    mkdir -p <state_dir>
    "$CIH" write-run-json \
      --mode <fixed-N|until-converged> [--iterations N] [--max-iterations M] \
-     --value-threshold <x> [--focus <a> --focus <b> …] \
+     --value-threshold <x> [--focus <a> --focus <b> …] --brief "<synthesized brief>" \
      --target-repo <target_repo> --state-dir <state_dir>
    ```
    This validates the config and writes `<state_dir>/run.json` — the hand-off artifact. On a

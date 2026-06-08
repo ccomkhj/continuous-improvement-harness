@@ -32,6 +32,7 @@ class RunConfig:
     max_iterations: int = 25
     budget_cap: Optional[int] = None
     focus_areas: list[str] = field(default_factory=list)
+    brief: str = ""
     value_threshold: float = 0.5
     convergence_dry_streak: int = 2
     plan_review_retries: int = 2

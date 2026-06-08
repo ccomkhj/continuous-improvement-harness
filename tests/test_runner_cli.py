@@ -256,6 +256,27 @@ def test_write_run_json_cmd_writes_scoped_config(tmp_path):
     assert cfg.state_dir == str(s)
 
 
+def test_parse_args_brief(tmp_path):
+    from cih.runner import parse_args, build_config
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    ns = parse_args(["--mode", "until-converged", "--target-repo", str(t),
+                     "--state-dir", str(s), "--brief", "speed up realtime_inventory hot path"])
+    assert ns.brief == "speed up realtime_inventory hot path"
+    assert build_config(ns).brief == "speed up realtime_inventory hot path"
+
+
+def test_write_run_json_persists_brief(tmp_path):
+    """The scoped free-form brief survives the write -> load round trip."""
+    from cih.runner import main, load_run_json
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    brief = "perf: realtime_inventory only; behavior-identical, pytest green; keep API+schemas"
+    code = main(["write-run-json", "--mode", "until-converged",
+                 "--target-repo", str(t), "--state-dir", str(s),
+                 "--focus", "performance", "--brief", brief])
+    assert code == 0
+    assert load_run_json(str(s / "run.json")).brief == brief
+
+
 def test_write_run_json_cmd_requires_mode(tmp_path):
     from cih.runner import main
     t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
