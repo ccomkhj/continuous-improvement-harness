@@ -19,6 +19,7 @@ from pathlib import Path
 
 from cih import merge_queue
 from cih.agents import invoke
+from cih.progress import notify
 from cih.safety import GitError, run_git
 from cih.state import StateHeader, write_state
 from cih.tdd_verifier import verify_tdd
@@ -78,6 +79,9 @@ def build_integration(*, contracts, runner, verifier=None, repo, worktrees_root,
         results = []
         for charter in charters:
             team_id = charter["id"]
+            if log:
+                log(f"iter {iteration}: team {team_id} started "
+                    f"(plan → review → execute → tdd → review)")
             # Iteration-scoped worktree/branch: cih/<run_id>/iter-NNN/<team_id>.
             # Branch off the CURRENT integration head so teams build on prior merges.
             wt = mgr.create(f"{iter_id}/{team_id}", state["head"])
@@ -96,9 +100,13 @@ def build_integration(*, contracts, runner, verifier=None, repo, worktrees_root,
             except Exception as e:  # don't leak the worktree on an unexpected crash
                 mgr.remove(wt)
                 result = TeamResult(team_id, False, f"team crashed: {e}")
+                notify(state_dir, f"iter {iteration}: team {team_id} CRASHED — {e}")
                 _persist(iteration, team_id, result)
                 results.append(result)
                 continue
+            notify(state_dir,
+                   f"iter {iteration}: team {team_id} "
+                   f"{'PASSED' if result.passed else 'FAILED'} — {result.reason}")
             _persist(iteration, team_id, result, wt=wt)
             if result.passed:
                 pending[team_id] = {"worktree": wt, "charter": charter,

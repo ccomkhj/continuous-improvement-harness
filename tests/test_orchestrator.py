@@ -27,6 +27,20 @@ def test_fixed_n_runs_exactly_n_iterations(tmp_path):
     assert summary["iterations_run"] == 3
     assert Path(cfg.state_dir, "run.json").exists()
 
+def test_high_planner_ctx_includes_brief(tmp_path):
+    """The scoped brief reaches the high-planner audit context, so detailed
+    scoping actually steers the audit (not just focus_areas)."""
+    cfg = _cfg(tmp_path, iterations=1,
+               brief="perf: realtime_inventory hot path; behavior-identical only")
+    seen = {}
+    def high_planner(ctx):
+        seen.update(ctx)
+        return {"opportunities": [], "charters": []}
+    Orchestrator(cfg, high_planner_fn=high_planner,
+                 team_runner_fn=lambda *a, **k: []).run()
+    assert seen["brief"] == "perf: realtime_inventory hot path; behavior-identical only"
+
+
 def test_until_converged_stops_after_dry_streak(tmp_path):
     cfg = _cfg(tmp_path, mode="until-converged", iterations=None,
                convergence_dry_streak=2, max_iterations=10)
@@ -297,3 +311,31 @@ def test_on_iteration_end_failure_does_not_abort_run(tmp_path):
                         on_iteration_end=boom)
     summary = orch.run()  # must NOT raise
     assert summary["iterations_run"] == 2
+
+
+def test_run_emits_progress_events(tmp_path):
+    """progress.md is watchable: the loop logs the high-planner audit (the long,
+    previously-silent step), the audit result, and the run terminus."""
+    cfg = _cfg(tmp_path, iterations=1)
+    Orchestrator(cfg,
+                 high_planner_fn=lambda ctx: {"opportunities": [], "charters": []},
+                 team_runner_fn=lambda *a, **k: []).run()
+    progress = Path(cfg.state_dir, "progress.md").read_text()
+    assert "iteration 1 start" in progress
+    assert "high-planner audit started" in progress
+    assert "audit done" in progress
+    assert "run done" in progress
+
+
+def test_run_logs_failure_reason_to_progress(tmp_path):
+    """A crash surfaces in progress.md (a tailing watcher sees WHY it died,
+    not just silence)."""
+    cfg = _cfg(tmp_path, iterations=1)
+    def boom(ctx):
+        raise RuntimeError("kaboom")
+    with pytest.raises(RuntimeError):
+        Orchestrator(cfg, high_planner_fn=boom,
+                     team_runner_fn=lambda *a, **k: []).run()
+    progress = Path(cfg.state_dir, "progress.md").read_text()
+    assert "run FAILED" in progress
+    assert "kaboom" in progress

@@ -6,6 +6,7 @@ from cih.config import RunConfig
 from cih.state import StateHeader, write_state, read_state
 from cih.ledger import Ledger, Opportunity, fingerprint
 from cih.merge_queue import MergeOutcome
+from cih.progress import append_progress, notify
 
 @dataclass
 class IterationResult:
@@ -77,19 +78,34 @@ class Orchestrator:
                     break
 
                 i = iterations_run + 1
+                append_progress(self.state_dir, f"## iteration {i} start")
                 ctx = {"iteration": i, "target_repo": self.cfg.target_repo,
-                       "focus_areas": self.cfg.focus_areas,
+                       "focus_areas": self.cfg.focus_areas, "brief": self.cfg.brief,
                        "ledger": self.ledger.to_dict()}
+                notify(self.state_dir,
+                       f"iter {i}: high-planner audit started (can take a few minutes)…")
                 audit = self.high_planner_fn(ctx)
                 self._ingest_opportunities(audit)
+                notify(
+                    self.state_dir,
+                    f"iter {i}: audit done — {len(audit.get('opportunities', []))} "
+                    f"opportunities, {len(audit.get('charters', []))} charters")
 
                 charters = audit.get("charters", [])[: self.cfg.max_teams_per_iteration]
                 if self.cfg.budget_cap is not None:
                     charters = charters[: max(0, self.cfg.budget_cap - teams_run)]
+                append_progress(
+                    self.state_dir,
+                    f"iter {i}: dispatching {len(charters)} team(s): "
+                    f"{[c.get('id') for c in charters]}")
                 results = self.team_runner_fn(charters, ctx)
                 if self.cfg.budget_cap is not None:
                     teams_run += len(charters)
                 outcome = self.integrate_fn(results, ctx)
+                notify(
+                    self.state_dir,
+                    f"iter {i}: integrated — merged={sorted(outcome.merged)} "
+                    f"rejected={sorted(outcome.rejected)}")
 
                 # mark the ledger from the integration outcome (drives convergence)
                 fp_by_team = {c["id"]: c["opportunity_fp"]
@@ -115,6 +131,8 @@ class Orchestrator:
 
                 dry = self.ledger.is_dry(self.cfg.value_threshold, current_iteration=i)
                 dry_streak = dry_streak + 1 if dry else 0
+                append_progress(self.state_dir,
+                                f"iter {i}: done (dry={dry}, dry_streak={dry_streak})")
                 iteration_results.append(IterationResult(
                     iteration=i, charters=charters, team_results=results, dry=dry))
 
@@ -154,6 +172,9 @@ class Orchestrator:
                     stopped_reason = "converged"
                     break
         except BaseException as e:
+            notify(self.state_dir,
+                   f"# run FAILED — {type(e).__name__}: {e} "
+                   f"(after {iterations_run} iteration(s))")
             summary = {"iterations_run": iterations_run, "stopped_reason": "failed",
                        "error": f"{type(e).__name__}: {e}",
                        "iterations": len(iteration_results)}
@@ -161,6 +182,8 @@ class Orchestrator:
             self._persist_ledger("failed")
             raise
 
+        notify(self.state_dir,
+               f"# run done — {stopped_reason}, {iterations_run} iteration(s)")
         summary = {"iterations_run": iterations_run, "stopped_reason": stopped_reason,
                    "iterations": len(iteration_results)}
         self._persist_run("done", {"config": self.cfg.to_dict(), "summary": summary})
