@@ -21,22 +21,24 @@ blocked at the wrapper level. Runs as an interactive CLI (with a `--non-interact
 ```mermaid
 flowchart TB
     ORCH["orchestrator · pure control flow"] --> HP["high-planner<br/>audit → ledger → charters"]
-    subgraph teams["parallel teams · one worktree each"]
+    subgraph teams["isolated teams · one worktree each<br/>(run sequentially)"]
         T1["planner → plan-reviewer →<br/>executor → tdd_verifier (pytest) →<br/>execution-reviewer"]
         T2["team-NN …"]
     end
     HP --> T1 & T2
-    T1 & T2 --> MQ["merge queue<br/>rebase → re-verify → fast-forward"]
+    T1 & T2 --> MQ["merge queue<br/>merge → re-verify → advance head"]
     MQ --> DEC{"ledger dry / N reached?"}
     DEC -->|no| ORCH
     DEC -->|yes| DONE["stop · report.html"]
 ```
 
-A **high-planner** scores improvement opportunities and splits them into non-overlapping charters.
-Each charter runs a five-agent pipeline in its own worktree, gated by a mechanical pytest verifier
-and a skeptical reviewer. Passing teams merge **one at a time** through a queue that re-runs the
-full suite before fast-forwarding. An **opportunity ledger** remembers what's been tried, cools
-down failures, and drives the run to convergence.
+A **high-planner** scores improvement opportunities and splits them into independent charters
+(meant to touch disjoint files). Each charter runs a five-stage pipeline — planner →
+plan-reviewer → executor → mechanical pytest verifier → execution-reviewer — in its own disposable
+worktree; teams run **sequentially** (the worktrees keep them isolated). Passing teams merge
+**one at a time** through a queue that merges onto the integration base, re-runs the full suite,
+then advances the integration head — so any cross-team conflict is caught there. An **opportunity
+ledger** remembers what's been tried, cools down failures, and drives the run to convergence.
 
 ## Quick start
 
@@ -102,6 +104,9 @@ autonomous run lives in its own workspace, not the scoping session.
   structurally unreachable; forbidden paths (`secrets/`, `*.pem`, `*.key`) are rejected.
 - **Never touches your tree** — all work happens in disposable worktrees; state lives outside the
   target repo and every git command is logged.
+- **Watchable** — each iteration / audit / team / merge milestone is appended to
+  `<state_dir>/progress.md` (`tail -F` it to follow a run live); set `CIH_NOTIFY_CMD` to a notifier
+  command (e.g. one that calls `osascript`) to also get a desktop notification per milestone.
 
 ## Tests
 
