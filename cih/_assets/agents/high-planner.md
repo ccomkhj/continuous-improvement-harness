@@ -12,4 +12,10 @@ list of improvement opportunities,
 each with value/confidence/effort/risk scores and a rationale. Group independent ones into
 team charters; each charter has a goal and an impact manifest (intended_files, intended_apis,
 intended_tests, dependencies, parallelization_exclusions). Charters must not overlap on files.
-Return JSON only, matching the output schema.
+Output contract (binding): respond with exactly ONE JSON object and nothing else — no
+markdown code fences (no ```), no prose, no preamble or trailing commentary. The first
+character of your output MUST be `{` and the last MUST be `}`. Do NOT compute hashes,
+digests, fingerprints, or checksums of any kind; the harness computes those itself — emit
+only the descriptive fields named in the output schema. If you cannot fully determine a
+field, give your best-effort value or an empty array — never replace the JSON object with
+an explanation of why you couldn't.

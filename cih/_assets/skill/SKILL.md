@@ -110,8 +110,24 @@ questions and do not drive the loop in this session.
      come from `run.json`.
    - Pick a unique `<run_slug>` per run (e.g. a focus-area slug + short date) so branches don't
      collide with earlier runs. No `--agent`: the run is headless, with no agent in the loop.
-5. **Open and report.** `superset workspaces open <new_workspace_id>` to surface it, then report
-   the workspace id / deep link to the user and STOP.
+5. **Add a watcher terminal so the run is observable.** The `--command` runs the loop headless in
+   a detached "Command" terminal that shows no live output. Add a second terminal IN the new
+   workspace that tails the progress the runner now emits to `<state_dir>/progress.md` (iteration
+   start, "high-planner audit started", "audit done: X opps Y charters", per-team PASSED/FAILED,
+   merged/rejected, and `run done`/`run FAILED` on exit):
+   ```
+   superset terminals create --workspace <new_workspace_id> \
+     --command "touch <state_dir>/progress.md; tail -F <state_dir>/progress.md <state_dir>/run.json"
+   ```
+6. **Open and report.** `superset workspaces open <new_workspace_id>` to surface it (both the
+   Command terminal and the watcher), then report the workspace id / deep link to the user and STOP.
+
+> **Run in the current workspace instead (no new workspace).** If the user explicitly wants to watch
+> the run in *this* workspace rather than spawn a fresh one, skip the `workspaces create` hand-off and
+> run the loop here with `superset terminals create --workspace "$SUPERSET_WORKSPACE_ID" --command
+> "$CIH --from-run-json <state_dir>/run.json --target-repo <clean_checkout>" --cwd <clean_checkout>`.
+> The target MUST be a clean checkout (the runner's clean-tree preflight rejects a dirty tree — the
+> current workspace's worktree is usually dirty, so point `--target-repo` at a clean one).
 
 ## What the autonomous run does (headless runner, in the new workspace)
 
