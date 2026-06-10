@@ -223,3 +223,147 @@ def test_main_interactive_clean_exit_on_cancel(tmp_path, monkeypatch, capsys):
     assert code == 130
     err = capsys.readouterr().err
     assert "cancel" in err.lower()
+
+
+# --- run.json hand-off (scope in one session, run in a fresh workspace) ---
+
+def test_parse_args_from_run_json_makes_paths_optional(tmp_path):
+    """--from-run-json carries target/state, so they aren't required on the CLI."""
+    from cih.runner import parse_args
+    p = tmp_path / "run.json"
+    ns = parse_args(["--from-run-json", str(p)])
+    assert ns.from_run_json == str(p)
+    assert ns.target_repo is None and ns.state_dir is None
+
+
+def test_write_run_json_cmd_writes_scoped_config(tmp_path):
+    """`cih write-run-json <flags>` serialises a validated config to
+    <state_dir>/run.json without running, so a scoping session can hand off."""
+    from cih.runner import main, load_run_json
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    code = main(["write-run-json", "--mode", "fixed-N", "--iterations", "2",
+                 "--target-repo", str(t), "--state-dir", str(s),
+                 "--focus", "tests", "--value-threshold", "0.7"])
+    assert code == 0
+    run_json = s / "run.json"
+    assert run_json.exists()
+    cfg = load_run_json(str(run_json))
+    assert cfg.mode == "fixed-N"
+    assert cfg.iterations == 2
+    assert cfg.focus_areas == ["tests"]
+    assert cfg.value_threshold == 0.7
+    assert cfg.target_repo == str(t)
+    assert cfg.state_dir == str(s)
+
+
+def test_parse_args_brief(tmp_path):
+    from cih.runner import parse_args, build_config
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    ns = parse_args(["--mode", "until-converged", "--target-repo", str(t),
+                     "--state-dir", str(s), "--brief", "speed up realtime_inventory hot path"])
+    assert ns.brief == "speed up realtime_inventory hot path"
+    assert build_config(ns).brief == "speed up realtime_inventory hot path"
+
+
+def test_write_run_json_persists_brief(tmp_path):
+    """The scoped free-form brief survives the write -> load round trip."""
+    from cih.runner import main, load_run_json
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    brief = "perf: realtime_inventory only; behavior-identical, pytest green; keep API+schemas"
+    code = main(["write-run-json", "--mode", "until-converged",
+                 "--target-repo", str(t), "--state-dir", str(s),
+                 "--focus", "performance", "--brief", brief])
+    assert code == 0
+    assert load_run_json(str(s / "run.json")).brief == brief
+
+
+def test_write_run_json_cmd_requires_mode(tmp_path):
+    from cih.runner import main
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    with pytest.raises(ConfigError, match="--mode is required"):
+        main(["write-run-json", "--target-repo", str(t), "--state-dir", str(s)])
+
+
+def test_load_run_json_round_trips(tmp_path):
+    """load_run_json reconstructs the exact RunConfig that was persisted."""
+    from cih.runner import load_run_json
+    from cih.state import write_state, StateHeader
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    cfg = RunConfig.create(mode="until-converged", target_repo=str(t),
+                           state_dir=str(s), focus_areas=["perf", "tests"],
+                           value_threshold=0.3)
+    p = s / "run.json"
+    write_state(p, StateHeader("run-1", None, None, None, "scoped", "orchestrator"),
+                cfg.to_dict())
+    assert load_run_json(str(p)).to_dict() == cfg.to_dict()
+
+
+def test_load_run_json_accepts_terminal_run_body(tmp_path):
+    """A completed run nests config under body.config; load_run_json handles it."""
+    from cih.runner import load_run_json
+    from cih.state import write_state, StateHeader
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    cfg = RunConfig.create(mode="fixed-N", iterations=1, target_repo=str(t),
+                           state_dir=str(s))
+    p = s / "run.json"
+    write_state(p, StateHeader("run-1", None, None, None, "done", "orchestrator"),
+                {"config": cfg.to_dict(), "summary": {"iterations_run": 1}})
+    assert load_run_json(str(p)).to_dict() == cfg.to_dict()
+
+
+def test_main_from_run_json_loads_config_without_paths(tmp_path, monkeypatch):
+    """main(--from-run-json) loads the persisted cfg and runs it, with no
+    --target-repo/--state-dir on the command line."""
+    from cih import runner as runner_mod
+    t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
+    runner_mod.main(["write-run-json", "--mode", "fixed-N", "--iterations", "1",
+                     "--target-repo", str(t), "--state-dir", str(s)])
+
+    captured = {}
+
+    class _StubOrch:
+        def run(self):
+            return {"iterations_run": 0}
+
+    def _fake_build(cfg, runner, report=False):
+        captured["cfg"] = cfg
+        return _StubOrch()
+
+    monkeypatch.setattr(runner_mod, "build_orchestrator", _fake_build)
+    monkeypatch.setattr("cih.agents.ClaudeCliRunner", lambda cwd: object())
+
+    code = runner_mod.main(["--from-run-json", str(s / "run.json")])
+    assert code == 0
+    assert captured["cfg"].mode == "fixed-N"
+    assert captured["cfg"].target_repo == str(t)
+
+
+def test_main_from_run_json_target_repo_override(tmp_path, monkeypatch):
+    """An explicit --target-repo alongside --from-run-json overrides the file's
+    target (so a run hands off to a fresh workspace checkout, not the original)."""
+    from cih import runner as runner_mod
+    t = tmp_path / "orig"; s = tmp_path / "s"; ws = tmp_path / "workspace"
+    t.mkdir(); s.mkdir(); ws.mkdir()
+    runner_mod.main(["write-run-json", "--mode", "until-converged",
+                     "--target-repo", str(t), "--state-dir", str(s),
+                     "--focus", "tests"])
+
+    captured = {}
+
+    class _StubOrch:
+        def run(self):
+            return {}
+
+    def _fake_build(cfg, runner, report=False):
+        captured["cfg"] = cfg
+        return _StubOrch()
+
+    monkeypatch.setattr(runner_mod, "build_orchestrator", _fake_build)
+    monkeypatch.setattr("cih.agents.ClaudeCliRunner", lambda cwd: object())
+
+    code = runner_mod.main(["--from-run-json", str(s / "run.json"),
+                            "--target-repo", str(ws)])
+    assert code == 0
+    assert captured["cfg"].target_repo == str(ws)   # overridden
+    assert captured["cfg"].state_dir == str(s)       # kept from file
+    assert captured["cfg"].focus_areas == ["tests"]  # kept from file
