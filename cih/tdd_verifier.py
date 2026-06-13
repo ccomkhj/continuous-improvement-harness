@@ -4,6 +4,10 @@ from pathlib import Path
 
 from cih.safety import GitError, run_git
 
+# Bound every test-command run so a hanging suite can't stall verification
+# forever. A genuine hang is unbounded; this ceiling only trips real wedges.
+TEST_DEFAULT_TIMEOUT = 1800.0
+
 
 @dataclass
 class TddVerdict:
@@ -24,8 +28,10 @@ def _checkout(repo: Path, sha: str):
     run_git(["checkout", "-q", "--force", sha], cwd=repo)
 
 
-def _run(repo: Path, cmd: list[str]) -> int:
-    return subprocess.run(cmd, cwd=str(repo), capture_output=True, text=True).returncode
+def _run(repo: Path, cmd: list[str], timeout: float | None = TEST_DEFAULT_TIMEOUT) -> int:
+    return subprocess.run(
+        cmd, cwd=str(repo), capture_output=True, text=True, timeout=timeout
+    ).returncode
 
 
 def _is_clean(repo: Path) -> bool:

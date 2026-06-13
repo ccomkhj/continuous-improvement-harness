@@ -20,14 +20,18 @@ def append_progress(state_dir, line: str) -> None:
         f.write(f"{_now()} {line}\n")
 
 
-def notify(state_dir, line: str) -> None:
+# A misbehaving notifier must never stall the loop; bound it tightly.
+NOTIFY_DEFAULT_TIMEOUT = 10.0
+
+
+def notify(state_dir, line: str, timeout: float | None = NOTIFY_DEFAULT_TIMEOUT) -> None:
     """Record a milestone to progress.md AND push it to an optional notifier.
 
     Always appends (so the watcher/audit trail is unchanged). If the env var
     `CIH_NOTIFY_CMD` is set, runs it with the milestone line appended as the
     final argument — e.g. `CIH_NOTIFY_CMD="terminal-notifier -title cih -message"`
-    or a wrapper that calls osascript / posts to Slack. Best-effort: a missing
-    or failing notifier never aborts the run.
+    or a wrapper that calls osascript / posts to Slack. Best-effort and bounded
+    by `timeout`: a missing, failing, or hanging notifier never aborts the run.
     """
     append_progress(state_dir, line)
     cmd = os.environ.get("CIH_NOTIFY_CMD")
@@ -39,6 +43,7 @@ def notify(state_dir, line: str) -> None:
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=timeout,
         )
     except Exception:
         pass  # notifications are best-effort; never break the loop

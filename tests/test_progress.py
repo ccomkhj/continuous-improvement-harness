@@ -61,3 +61,17 @@ def test_notify_swallows_failing_cmd(tmp_path, monkeypatch):
     monkeypatch.setenv("CIH_NOTIFY_CMD", "/nonexistent/notifier-binary")
     notify(sd, "still logged")  # must not raise even if the command is missing
     assert "still logged" in (sd / "progress.md").read_text()
+
+
+def test_notify_does_not_hang_on_slow_notifier(tmp_path, monkeypatch):
+    """A slow/hanging CIH_NOTIFY_CMD must not block the run: notify enforces a
+    timeout and stays best-effort (never raises)."""
+    import time
+
+    sd = tmp_path / "state"
+    monkeypatch.setenv("CIH_NOTIFY_CMD", "sleep 5")
+    start = time.monotonic()
+    notify(sd, "milestone", timeout=0.3)  # must return promptly, not after 5s
+    assert time.monotonic() - start < 3
+    # the milestone is still recorded to the audit trail
+    assert "milestone" in (sd / "progress.md").read_text()

@@ -10,6 +10,12 @@ class GitError(Exception):
     pass
 
 
+# An unattended run must never hang on a stuck git process (e.g. a credential
+# prompt or a wedged lock). Bound every git call; a true hang is unbounded, so a
+# generous ceiling still catches it without tripping legitimately slow ops.
+GIT_DEFAULT_TIMEOUT = 600.0
+
+
 _FORBIDDEN = [
     ".cih/*",
     ".cih",
@@ -71,12 +77,22 @@ def _assert_git_allowed(args) -> None:
             raise GitError("git 'add -A/--all/.' is blocked; use the explicit staging wrapper")
 
 
-def run_git(args: list[str], cwd: Path, log: Callable[[str], None] | None = None) -> str:
+def run_git(
+    args: list[str],
+    cwd: Path,
+    log: Callable[[str], None] | None = None,
+    timeout: float | None = GIT_DEFAULT_TIMEOUT,
+) -> str:
     _assert_git_allowed(args)
     cmd = ["git", *args]
     if log:
         log(f"git -C {cwd} {' '.join(args)}")
-    proc = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True)
+    try:
+        proc = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        if log:
+            log(f"git timed out after {timeout}s: {' '.join(args)}")
+        raise GitError(f"git {' '.join(args)} timed out after {timeout}s") from e
     if proc.returncode != 0:
         if log:
             log(f"git failed ({proc.returncode}): {' '.join(args)}")

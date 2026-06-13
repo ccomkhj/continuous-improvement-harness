@@ -71,9 +71,18 @@ class ClaudeCliRunner:
     Flags precede the prompt; output is expected as JSON on stdout.
     """
 
-    def __init__(self, cwd: str, extra_args: list[str] | None = None):
+    # Bound the LLM call so a wedged `claude -p` can't block the run forever.
+    AGENT_DEFAULT_TIMEOUT = 1800.0
+
+    def __init__(
+        self,
+        cwd: str,
+        extra_args: list[str] | None = None,
+        timeout: float | None = AGENT_DEFAULT_TIMEOUT,
+    ):
         self.cwd = cwd
         self.extra_args = extra_args or []
+        self.timeout = timeout
 
     def run(self, contract: AgentContract, input_data: dict) -> dict:
         prompt = json.dumps(input_data)
@@ -90,7 +99,12 @@ class ClaudeCliRunner:
             "--",
             prompt,
         ]
-        proc = subprocess.run(cmd, cwd=self.cwd, capture_output=True, text=True)
+        try:
+            proc = subprocess.run(
+                cmd, cwd=self.cwd, capture_output=True, text=True, timeout=self.timeout
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(f"{contract.role}: claude -p timed out after {self.timeout}s") from e
         if proc.returncode != 0:
             raise RuntimeError(f"claude failed for {contract.role}: {proc.stderr}")
         try:

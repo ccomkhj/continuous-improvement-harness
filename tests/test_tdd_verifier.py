@@ -154,3 +154,15 @@ def test_unrelated_commits_blocked_by_ancestry(tmp_path):
     )
     assert not v.passed
     assert v.reason == "green is not a descendant of red"
+
+
+def test_run_times_out_on_slow_command(tmp_path):
+    """The test-command runner must enforce a timeout so a hanging test suite
+    cannot stall verification forever."""
+    import pytest
+
+    from cih.tdd_verifier import _run
+
+    r = _repo(tmp_path)
+    with pytest.raises(subprocess.TimeoutExpired):
+        _run(r, ["python", "-c", "import time; time.sleep(5)"], timeout=0.3)

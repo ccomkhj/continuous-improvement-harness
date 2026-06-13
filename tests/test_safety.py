@@ -107,3 +107,20 @@ def test_run_git_allows_rev_parse(tmp_path):
     _committed_repo(tmp_path)
     out = run_git(["rev-parse", "HEAD"], cwd=tmp_path)
     assert out.strip()
+
+
+def test_run_git_times_out_raises_giterror(tmp_path, monkeypatch):
+    """A git subprocess that exceeds the timeout must surface as GitError (and be
+    logged), not hang the run forever."""
+    _init_repo(tmp_path)
+
+    def fake_run(*args, **kwargs):
+        assert "timeout" in kwargs, "run_git must pass a timeout to subprocess.run"
+        raise subprocess.TimeoutExpired(cmd=["git"], timeout=kwargs["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    log = []
+    with pytest.raises(GitError) as ei:
+        run_git(["status"], cwd=tmp_path, log=log.append, timeout=0.01)
+    assert "timed out" in str(ei.value).lower()
+    assert any("timed out" in line.lower() for line in log)

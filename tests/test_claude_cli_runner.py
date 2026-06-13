@@ -1,5 +1,6 @@
 # tests/test_claude_cli_runner.py
 import json
+import subprocess
 
 import pytest
 
@@ -169,3 +170,17 @@ def test_cmd_passes_json_schema(monkeypatch):
     cmd = captured["cmd"]
     assert "--json-schema" in cmd
     assert json.dumps(schema) in cmd
+
+
+def test_claude_runner_times_out_raises_runtimeerror(monkeypatch):
+    """A hanging `claude -p` call must be bounded by a timeout and surfaced as a
+    RuntimeError, not block the autonomous run indefinitely."""
+
+    def fake_run(*args, **kwargs):
+        assert "timeout" in kwargs, "ClaudeCliRunner must pass a timeout to subprocess.run"
+        raise subprocess.TimeoutExpired(cmd=["claude"], timeout=kwargs["timeout"])
+
+    monkeypatch.setattr(cih.agents.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError) as ei:
+        ClaudeCliRunner(cwd=".", timeout=0.01).run(_contract(), {"x": 1})
+    assert "timed out" in str(ei.value).lower()
