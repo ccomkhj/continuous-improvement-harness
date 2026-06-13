@@ -328,3 +328,75 @@ def test_progress_log_records_git_commands(tmp_path):
     text = progress.read_text()
     assert "git -C" in text
     assert "worktree add" in text
+
+
+def test_integration_suite_timeout_rejects_team_cleanly(tmp_path, monkeypatch):
+    """If the integration suite run times out, the team is rejected (not merged,
+    not crashed) and the run continues."""
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
+    runner = _passing_runner()
+    team_runner, integrate_fn = _build(tmp_path, repo, base, runner)
+    results = team_runner([_charter("team-01")], {"iteration": 1})
+    wt = tmp_path / "wts" / "run-1" / "iter-001" / "team-01"
+    _commit_in_worktree(wt, "a.txt", "work", "team work")
+
+    import cih.integration as integ
+
+    real_run = subprocess.run
+
+    def fake_run(*args, **kwargs):
+        argv = args[0] if args else kwargs.get("args")
+        if argv and "pytest" in argv:  # only the integration suite call times out
+            raise subprocess.TimeoutExpired(cmd=argv, timeout=kwargs.get("timeout"))
+        return real_run(*args, **kwargs)  # git operations run for real
+
+    monkeypatch.setattr(integ.subprocess, "run", fake_run)
+    outcome = integrate_fn(results, {"iteration": 1})
+
+    assert outcome.merged == []
+    assert outcome.rejected == ["team-01"]
+    assert _int_ref(repo) == base
+
+
+def test_later_team_rejection_preserves_earlier_merge(tmp_path):
+    """Two teams pass TDD in one iteration; the first merges cleanly, the second
+    is rejected at integration (its merge breaks the suite). The first team's
+    merge must survive — and the integration worktree must stay consistent so a
+    LATER iteration can still merge."""
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
+    runner = _passing_runner()
+    team_runner, integrate_fn = _build(tmp_path, repo, base, runner)
+
+    # iteration 1: team-01 adds a plain file (suite => no tests, ok),
+    # team-02 adds a FAILING test (suite => fails once merged).
+    r1 = team_runner(
+        [
+            _charter("team-01", intended_files=("a.txt",)),
+            _charter("team-02", intended_files=("test_b.py",)),
+        ],
+        {"iteration": 1},
+    )
+    wt1 = tmp_path / "wts" / "run-1" / "iter-001" / "team-01"
+    wt2 = tmp_path / "wts" / "run-1" / "iter-001" / "team-02"
+    _commit_in_worktree(wt1, "a.txt", "alpha", "add a")
+    _commit_in_worktree(wt2, "test_b.py", "def test_b():\n    assert False\n", "add failing test")
+
+    out1 = integrate_fn(r1, {"iteration": 1})
+    assert out1.merged == ["team-01"]
+    assert out1.rejected == ["team-02"]
+    assert _reachable(repo, "a.txt")
+    assert not _reachable(repo, "test_b.py")
+    head_after_1 = _int_ref(repo)
+    assert head_after_1 == out1.final_base_sha
+
+    # iteration 2: a clean team must still be able to merge on top — proving the
+    # integration worktree wasn't left inconsistent by the iteration-1 rejection.
+    r2 = team_runner([_charter("team-03", intended_files=("c.txt",))], {"iteration": 2})
+    wt3 = tmp_path / "wts" / "run-1" / "iter-002" / "team-03"
+    _commit_in_worktree(wt3, "c.txt", "gamma", "add c")
+    out2 = integrate_fn(r2, {"iteration": 2})
+    assert out2.merged == ["team-03"]
+    assert _reachable(repo, "a.txt")
+    assert _reachable(repo, "c.txt")

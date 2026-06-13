@@ -23,7 +23,7 @@ from cih.agents import invoke
 from cih.progress import notify
 from cih.safety import GitError, run_git
 from cih.state import StateHeader, write_state
-from cih.tdd_verifier import verify_tdd
+from cih.tdd_verifier import TEST_DEFAULT_TIMEOUT, verify_tdd
 from cih.team import TeamResult, run_team
 from cih.worktree import WorktreeManager
 
@@ -154,8 +154,10 @@ def build_integration(
         def reverify(team_id, current_base):
             # Operate on the single advancing integration worktree. We merge into
             # the integration branch (which already advanced past prior merges);
-            # current_base is bookkeeping only — the actual merge target is the
-            # integration HEAD. On any rejection we reset back to `base`.
+            # the actual merge target is the integration HEAD. On rejection we
+            # reset to `current_base` — the LAST successfully-merged head — so a
+            # rejected team only undoes its own merge and never discards an
+            # earlier team's merge from this same iteration.
             team_branch = pending[team_id]["worktree"].branch
             try:
                 run_git(["merge", "--no-ff", "--no-edit", team_branch], cwd=int_wt, log=log)
@@ -167,13 +169,23 @@ def build_integration(
                 return (False, None)
 
             def _reject():
-                run_git(["reset", "--hard", base], cwd=int_wt, log=log)
+                run_git(["reset", "--hard", current_base], cwd=int_wt, log=log)
                 return (False, None)
 
             # Full suite in the integration worktree (exit 5 == no tests, ok).
-            proc = subprocess.run(
-                ["python", "-m", "pytest", "-q"], cwd=int_wt, capture_output=True, text=True
-            )
+            # Bounded so a hanging suite rejects the team instead of stalling.
+            try:
+                proc = subprocess.run(
+                    ["python", "-m", "pytest", "-q"],
+                    cwd=int_wt,
+                    capture_output=True,
+                    text=True,
+                    timeout=TEST_DEFAULT_TIMEOUT,
+                )
+            except subprocess.TimeoutExpired:
+                if log:
+                    log(f"integration suite timed out for {team_id}; rejecting")
+                return _reject()
             if proc.returncode not in (0, 5):
                 return _reject()
             review = invoke(
