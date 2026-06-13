@@ -10,6 +10,7 @@ def fingerprint(title: str, scope: str) -> str:
     norm = re.sub(r"\s+", " ", title.strip().lower())
     return hashlib.sha256(f"{norm}|{scope}".encode()).hexdigest()[:16]
 
+
 @dataclass
 class Opportunity:
     fp: str
@@ -23,6 +24,7 @@ class Opportunity:
     state: str = "open"
     attempt_count: int = 0
     cooldown_until: int | None = None
+
 
 class Ledger:
     def __init__(self):
@@ -54,16 +56,19 @@ class Ledger:
         if current_iteration is None:
             return
         for o in self._items.values():
-            if o.state == "cooldown" and o.cooldown_until is not None \
-                    and current_iteration >= o.cooldown_until:
+            if (
+                o.state == "cooldown"
+                and o.cooldown_until is not None
+                and current_iteration >= o.cooldown_until
+            ):
                 self._set_state(o, "open")
                 o.cooldown_until = None
 
-    def select_open(self, value_threshold: float,
-                    current_iteration: int | None = None) -> list[Opportunity]:
+    def select_open(
+        self, value_threshold: float, current_iteration: int | None = None
+    ) -> list[Opportunity]:
         self._refresh_cooldowns(current_iteration)
-        return [o for o in self._items.values()
-                if o.state == "open" and o.value >= value_threshold]
+        return [o for o in self._items.values() if o.state == "open" and o.value >= value_threshold]
 
     def is_dry(self, value_threshold: float, current_iteration: int) -> bool:
         # Spec §5: dry = no open opportunity above threshold AND no retryable
@@ -75,14 +80,14 @@ class Ledger:
     def mark_merged(self, fp: str) -> None:
         self._set_state(self._items[fp], "merged")
 
-    def mark_cooldown(self, fp: str, current_iteration: int,
-                      cooldown_iterations: int) -> None:
+    def mark_cooldown(self, fp: str, current_iteration: int, cooldown_iterations: int) -> None:
         o = self._items[fp]
         self._set_state(o, "cooldown")
         o.cooldown_until = current_iteration + cooldown_iterations
 
-    def record_attempt_failure(self, fp: str, current_iteration: int,
-                               cooldown_iterations: int, max_attempts: int) -> None:
+    def record_attempt_failure(
+        self, fp: str, current_iteration: int, cooldown_iterations: int, max_attempts: int
+    ) -> None:
         o = self._items[fp]
         o.attempt_count += 1
         if o.attempt_count >= max_attempts:

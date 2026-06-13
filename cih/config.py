@@ -6,6 +6,7 @@ from pathlib import Path
 class ConfigError(Exception):
     pass
 
+
 _MODES = {"fixed-N", "until-converged"}
 
 DEPTH_BUDGET = {"low": 3, "medium": 6, "high": 10}

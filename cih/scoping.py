@@ -9,7 +9,9 @@ from cih.config import ConfigError, RunConfig  # noqa: F401
 class Asker(Protocol):
     """Injected I/O seam for the scoping interview. choices are (label, value) pairs."""
 
-    def select(self, message: str, choices: Sequence[tuple[str, Any]], default: Any = None) -> Any: ...
+    def select(
+        self, message: str, choices: Sequence[tuple[str, Any]], default: Any = None
+    ) -> Any: ...
     def checkbox(self, message: str, choices: Sequence[tuple[str, Any]]) -> list[Any]: ...
     def text(self, message: str, default: str = "") -> str: ...
     def confirm(self, message: str, default: bool = True) -> bool: ...
@@ -75,7 +77,9 @@ VALUE_CHOICES = [
 ]
 
 
-def _summary(target_repo, state_dir, mode, iterations, max_iterations, focus_areas, value_threshold) -> str:
+def _summary(
+    target_repo, state_dir, mode, iterations, max_iterations, focus_areas, value_threshold
+) -> str:
     bound = f"iterations={iterations}" if mode == "fixed-N" else f"max_iterations={max_iterations}"
     focus = ", ".join(focus_areas) if focus_areas else "(broad audit)"
     return (
@@ -101,23 +105,39 @@ def run_scoping_interview(target_repo: str, state_dir: str, asker: Asker) -> Run
         else:
             max_iterations = _ask_positive_int(asker, "Max iterations (safety cap)?", 25)
 
-        selected = asker.checkbox("Focus areas (space to toggle, enter to accept — optional)?",
-                                  [(f, f) for f in FOCUS_PRESETS])
+        selected = asker.checkbox(
+            "Focus areas (space to toggle, enter to accept — optional)?",
+            [(f, f) for f in FOCUS_PRESETS],
+        )
         extra = asker.text("Other focus areas (comma-separated, optional)?", default="")
         focus_areas = list(selected) + [s.strip() for s in extra.split(",") if s.strip()]
 
         value_threshold = asker.select("How aggressive should it be?", VALUE_CHOICES, default=0.5)
 
-        asker.note(_summary(target_repo, state_dir, mode, iterations,
-                            max_iterations, focus_areas, value_threshold))
+        asker.note(
+            _summary(
+                target_repo,
+                state_dir,
+                mode,
+                iterations,
+                max_iterations,
+                focus_areas,
+                value_threshold,
+            )
+        )
         if not asker.confirm("Go ahead with this run?", default=True):
             asker.note("Okay — let's redo the scoping.")
             continue
 
         return RunConfig.create(
-            mode=mode, iterations=iterations, max_iterations=max_iterations,
-            target_repo=target_repo, state_dir=state_dir,
-            focus_areas=focus_areas, value_threshold=value_threshold)
+            mode=mode,
+            iterations=iterations,
+            max_iterations=max_iterations,
+            target_repo=target_repo,
+            state_dir=state_dir,
+            focus_areas=focus_areas,
+            value_threshold=value_threshold,
+        )
 
 
 class QuestionaryAsker:
@@ -131,7 +151,9 @@ class QuestionaryAsker:
         return answer
 
     def select(self, message, choices, default=None):
-        return self._resolve(questionary.select(message, choices=_to_choices(choices), default=default))
+        return self._resolve(
+            questionary.select(message, choices=_to_choices(choices), default=default)
+        )
 
     def checkbox(self, message, choices):
         return self._resolve(questionary.checkbox(message, choices=_to_choices(choices)))

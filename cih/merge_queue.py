@@ -9,14 +9,20 @@ class MergeOutcome:
     rejected: list = field(default_factory=list)
     final_base_sha: str = ""
 
+
 def order_by_overlap(charters: list[dict]) -> list[dict]:
     # cheap precheck: fewer intended files -> integrate earlier (less collision surface)
-    return sorted(charters,
-                  key=lambda c: len(c.get("impact_manifest", {}).get("intended_files", [])))
+    return sorted(
+        charters, key=lambda c: len(c.get("impact_manifest", {}).get("intended_files", []))
+    )
 
-def integrate(teams: list[tuple], base_sha: str,
-              reverify: Callable[[str, str], tuple[bool, str | None]],
-              integration_retries: int) -> MergeOutcome:
+
+def integrate(
+    teams: list[tuple],
+    base_sha: str,
+    reverify: Callable[[str, str], tuple[bool, str | None]],
+    integration_retries: int,
+) -> MergeOutcome:
     """teams: list of (team_id, charter). reverify(team_id, base)->(ok, new_base_sha)
     re-runs the full suite + execution-reviewer on the rebased branch and returns
     the real new base SHA on success."""

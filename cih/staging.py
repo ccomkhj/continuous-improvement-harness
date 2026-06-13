@@ -9,16 +9,18 @@ from cih.safety import GitError, forbidden_paths, run_git, validate_no_forbidden
 class StagingError(Exception):
     pass
 
+
 # Glob metacharacters that would let git expand a single declared pathspec
 # into many files. We use an allowlist of literal paths instead of a denylist.
 _GLOB_CHARS = ("*", "?", "[")
+
 
 def _staged_set(repo: Path) -> set:
     out = run_git(["diff", "--cached", "--name-only"], cwd=repo)
     return set(out.split())
 
-def stage_files(repo: Path, paths: list[str],
-                log: Callable[[str], None] | None = None) -> None:
+
+def stage_files(repo: Path, paths: list[str], log: Callable[[str], None] | None = None) -> None:
     if not paths:
         raise StagingError("no paths declared; explicit staging requires at least one file")
 
@@ -63,5 +65,4 @@ def stage_files(repo: Path, paths: list[str],
     if unexpected:
         # undo only the unexpected entries; leave any legitimately-declared ones
         run_git(["reset", "-q", "--", *sorted(unexpected)], cwd=repo, log=log)
-        raise StagingError(
-            f"staging produced unexpected pathspec(s): {sorted(unexpected)}")
+        raise StagingError(f"staging produced unexpected pathspec(s): {sorted(unexpected)}")

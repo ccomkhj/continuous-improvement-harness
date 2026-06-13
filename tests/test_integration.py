@@ -11,8 +11,9 @@ from cih.tdd_verifier import TddVerdict
 
 
 def _git(args, cwd):
-    return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
-                          text=True, check=True).stdout.strip()
+    return subprocess.run(
+        ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True
+    ).stdout.strip()
 
 
 def _seed_repo(path: Path) -> str:
@@ -31,18 +32,23 @@ def _green_verifier(**kwargs):
 
 
 def _passing_runner(approved=True):
-    return StubRunner(responses={
-        "planner": {"tasks": ["t1"]},
-        "plan-reviewer": {"approved": True, "feedback": ""},
-        "executor": {"commits": []},
-        "execution-reviewer": {"approved": approved,
-                               "reasons": [] if approved else ["no"]},
-    })
+    return StubRunner(
+        responses={
+            "planner": {"tasks": ["t1"]},
+            "plan-reviewer": {"approved": True, "feedback": ""},
+            "executor": {"commits": []},
+            "execution-reviewer": {"approved": approved, "reasons": [] if approved else ["no"]},
+        }
+    )
 
 
 def _charter(team_id, intended_files=("a.txt",)):
-    return {"id": team_id, "goal": "x", "opportunity_fp": "fp-" + team_id,
-            "impact_manifest": {"intended_files": list(intended_files)}}
+    return {
+        "id": team_id,
+        "goal": "x",
+        "opportunity_fp": "fp-" + team_id,
+        "impact_manifest": {"intended_files": list(intended_files)},
+    }
 
 
 def _commit_in_worktree(wt_path, fname, content, msg):
@@ -54,11 +60,19 @@ def _commit_in_worktree(wt_path, fname, content, msg):
 
 def _build(tmp_path, repo, base, runner, integration_retries=2):
     return build_integration(
-        contracts=load_contracts(), runner=runner, verifier=_green_verifier,
-        repo=repo, worktrees_root=tmp_path / "wts", run_id="run-1",
-        base_sha=base, state_dir=tmp_path / "state",
-        plan_review_retries=2, exec_review_retries=2, attempt_cap=4,
-        integration_retries=integration_retries)
+        contracts=load_contracts(),
+        runner=runner,
+        verifier=_green_verifier,
+        repo=repo,
+        worktrees_root=tmp_path / "wts",
+        run_id="run-1",
+        base_sha=base,
+        state_dir=tmp_path / "state",
+        plan_review_retries=2,
+        exec_review_retries=2,
+        attempt_cap=4,
+        integration_retries=integration_retries,
+    )
 
 
 def _int_ref(repo):
@@ -69,12 +83,16 @@ def _reachable(repo, fname):
     """True if fname exists in the integration branch tip tree."""
     proc = subprocess.run(
         ["git", "cat-file", "-e", f"cih/run-1/integration:{fname}"],
-        cwd=str(repo), capture_output=True, text=True)
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+    )
     return proc.returncode == 0
 
 
 def test_team_runner_creates_worktree_and_persists_artifacts(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner()
     team_runner, _ = _build(tmp_path, repo, base, runner)
 
@@ -89,7 +107,8 @@ def test_team_runner_creates_worktree_and_persists_artifacts(tmp_path):
 
 
 def test_team_branch_is_iteration_scoped(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner()
     team_runner, _ = _build(tmp_path, repo, base, runner)
     team_runner([_charter("team-01")], {"iteration": 1})
@@ -98,7 +117,8 @@ def test_team_branch_is_iteration_scoped(tmp_path):
 
 
 def test_integrate_merges_passing_team_with_real_sha(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner()
     team_runner, integrate_fn = _build(tmp_path, repo, base, runner)
 
@@ -118,7 +138,8 @@ def test_integrate_merges_passing_team_with_real_sha(tmp_path):
 
 
 def test_integrate_rejects_when_reviewer_declines(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner(approved=True)
     team_runner, integrate_fn = _build(tmp_path, repo, base, runner)
     results = team_runner([_charter("team-01")], {"iteration": 1})
@@ -137,19 +158,30 @@ def test_integrate_rejects_when_reviewer_declines(tmp_path):
 
 
 def test_failed_team_worktree_removed(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
-    runner = StubRunner(responses={
-        "planner": {"tasks": ["t1"]},
-        "plan-reviewer": {"approved": False, "feedback": "too vague"},
-        "executor": {"commits": []},
-        "execution-reviewer": {"approved": True, "reasons": []},
-    })
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
+    runner = StubRunner(
+        responses={
+            "planner": {"tasks": ["t1"]},
+            "plan-reviewer": {"approved": False, "feedback": "too vague"},
+            "executor": {"commits": []},
+            "execution-reviewer": {"approved": True, "reasons": []},
+        }
+    )
     team_runner, integrate_fn = build_integration(
-        contracts=load_contracts(), runner=runner, verifier=_green_verifier,
-        repo=repo, worktrees_root=tmp_path / "wts", run_id="run-1",
-        base_sha=base, state_dir=tmp_path / "state",
-        plan_review_retries=1, exec_review_retries=1, attempt_cap=10,
-        integration_retries=2)
+        contracts=load_contracts(),
+        runner=runner,
+        verifier=_green_verifier,
+        repo=repo,
+        worktrees_root=tmp_path / "wts",
+        run_id="run-1",
+        base_sha=base,
+        state_dir=tmp_path / "state",
+        plan_review_retries=1,
+        exec_review_retries=1,
+        attempt_cap=10,
+        integration_retries=2,
+    )
 
     results = team_runner([_charter("team-01")], {"iteration": 1})
 
@@ -160,7 +192,8 @@ def test_failed_team_worktree_removed(tmp_path):
 
 
 def test_crashing_run_team_does_not_leak_worktree(tmp_path, monkeypatch):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner()
     team_runner, _ = _build(tmp_path, repo, base, runner)
 
@@ -179,7 +212,8 @@ def test_crashing_run_team_does_not_leak_worktree(tmp_path, monkeypatch):
 
 
 def test_pending_resets_per_iteration(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner()
     team_runner, integrate_fn = _build(tmp_path, repo, base, runner)
 
@@ -200,7 +234,8 @@ def test_pending_resets_per_iteration(tmp_path):
 
 
 def test_two_iterations_accumulate_changes(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner()
     team_runner, integrate_fn = _build(tmp_path, repo, base, runner)
 
@@ -216,8 +251,7 @@ def test_two_iterations_accumulate_changes(tmp_path):
     assert _reachable(repo, "a.txt")
 
     # iteration 2: team branches off the NEW head and adds b.txt
-    r2 = team_runner([_charter("team-01", intended_files=("b.txt",))],
-                     {"iteration": 2})
+    r2 = team_runner([_charter("team-01", intended_files=("b.txt",))], {"iteration": 2})
     wt2 = tmp_path / "wts" / "run-1" / "iter-002" / "team-01"
     # the team worktree must already contain iteration 1's a.txt (built on new head)
     assert (Path(wt2) / "a.txt").exists()
@@ -233,7 +267,8 @@ def test_two_iterations_accumulate_changes(tmp_path):
 
 
 def test_teardown_removes_worktrees_keeps_branches(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner()
     team_runner, integrate_fn = _build(tmp_path, repo, base, runner)
 
@@ -266,16 +301,25 @@ def test_teardown_removes_worktrees_keeps_branches(tmp_path):
 
 
 def test_progress_log_records_git_commands(tmp_path):
-    repo = tmp_path / "repo"; base = _seed_repo(repo)
+    repo = tmp_path / "repo"
+    base = _seed_repo(repo)
     runner = _passing_runner()
     state_dir = tmp_path / "state"
     team_runner, _ = build_integration(
-        contracts=load_contracts(), runner=runner, verifier=_green_verifier,
-        repo=repo, worktrees_root=tmp_path / "wts", run_id="run-1",
-        base_sha=base, state_dir=state_dir,
-        plan_review_retries=2, exec_review_retries=2, attempt_cap=4,
+        contracts=load_contracts(),
+        runner=runner,
+        verifier=_green_verifier,
+        repo=repo,
+        worktrees_root=tmp_path / "wts",
+        run_id="run-1",
+        base_sha=base,
+        state_dir=state_dir,
+        plan_review_retries=2,
+        exec_review_retries=2,
+        attempt_cap=4,
         integration_retries=2,
-        log=lambda line: append_progress(state_dir, line))
+        log=lambda line: append_progress(state_dir, line),
+    )
 
     team_runner([_charter("team-01")], {"iteration": 1})
 

@@ -12,9 +12,15 @@ class Worktree:
     branch: str
     base_sha: str
 
+
 class WorktreeManager:
-    def __init__(self, repo: Path, worktrees_root: Path, run_id: str,
-                 log: Callable[[str], None] | None = None):
+    def __init__(
+        self,
+        repo: Path,
+        worktrees_root: Path,
+        run_id: str,
+        log: Callable[[str], None] | None = None,
+    ):
         self.repo = Path(repo)
         self.worktrees_root = Path(worktrees_root)
         self.run_id = run_id
@@ -24,8 +30,7 @@ class WorktreeManager:
         branch = f"cih/{self.run_id}/{team_id}"
         path = self.worktrees_root / self.run_id / team_id
         path.parent.mkdir(parents=True, exist_ok=True)
-        run_git(["worktree", "add", "-b", branch, str(path), base_sha],
-                cwd=self.repo, log=self.log)
+        run_git(["worktree", "add", "-b", branch, str(path), base_sha], cwd=self.repo, log=self.log)
         return Worktree(team_id=team_id, path=str(path), branch=branch, base_sha=base_sha)
 
     def head_sha(self, wt: Worktree) -> str:

@@ -9,9 +9,14 @@ from cih.contracts import AgentContract, OutputValidationError
 
 
 def _contract():
-    return AgentContract(role="planner", agent_version="1.0.0",
-                         role_prompt="p", input_schema={"type": "object"},
-                         output_schema={"type": "object"}, allowed_tools=[])
+    return AgentContract(
+        role="planner",
+        agent_version="1.0.0",
+        role_prompt="p",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        allowed_tools=[],
+    )
 
 
 class _FakeProc:
@@ -22,8 +27,7 @@ class _FakeProc:
 
 
 def _patch(monkeypatch, proc):
-    monkeypatch.setattr(cih.agents.subprocess, "run",
-                        lambda *a, **k: proc)
+    monkeypatch.setattr(cih.agents.subprocess, "run", lambda *a, **k: proc)
 
 
 def test_wellformed_envelope_string_result(monkeypatch):
@@ -58,6 +62,7 @@ def test_nonzero_returncode_raises(monkeypatch):
 
 # --- regression: the high-planner crash (prose + ```json fence) ---
 
+
 def test_extract_bare_json():
     assert _extract_json('{"ok": true}') == {"ok": True}
 
@@ -71,8 +76,10 @@ def test_extract_unlabeled_fence():
 
 
 def test_extract_prose_plus_fenced_json():
-    text = ('Bash/Python execution is hard-denied here, so I cannot compute. '
-            'Here is the audit:\n\n```json\n{"ok": true, "score": 7}\n```')
+    text = (
+        "Bash/Python execution is hard-denied here, so I cannot compute. "
+        'Here is the audit:\n\n```json\n{"ok": true, "score": 7}\n```'
+    )
     assert _extract_json(text) == {"ok": True, "score": 7}
 
 
@@ -86,7 +93,7 @@ def test_extract_nested_braces():
 
 
 def test_extract_picks_final_fence_when_preamble_has_one():
-    text = ('Example: ```json\n{"ok": false}\n```\nFinal:\n```json\n{"ok": true}\n```')
+    text = 'Example: ```json\n{"ok": false}\n```\nFinal:\n```json\n{"ok": true}\n```'
     assert _extract_json(text) == {"ok": True}
 
 
@@ -118,8 +125,12 @@ def test_clirunner_invalid_result_raises_output_validation_error(monkeypatch):
 def test_prefers_structured_output_dict(monkeypatch):
     # With --json-schema, claude returns the schema object in `structured_output`
     # and leaves `result` as a prose summary. Prefer the structured object.
-    env = json.dumps({"result": "The structured output has been provided successfully.",
-                      "structured_output": {"opportunities": [], "charters": [{"id": "t1"}]}})
+    env = json.dumps(
+        {
+            "result": "The structured output has been provided successfully.",
+            "structured_output": {"opportunities": [], "charters": [{"id": "t1"}]},
+        }
+    )
     _patch(monkeypatch, _FakeProc(stdout=env))
     out = ClaudeCliRunner(cwd=".").run(_contract(), {"charter": "x"})
     assert out == {"opportunities": [], "charters": [{"id": "t1"}]}
@@ -146,9 +157,14 @@ def test_cmd_passes_json_schema(monkeypatch):
 
     monkeypatch.setattr(cih.agents.subprocess, "run", _capture)
     schema = {"type": "object", "required": ["ok"]}
-    contract = AgentContract(role="planner", agent_version="1.0.0", role_prompt="p",
-                             input_schema={"type": "object"}, output_schema=schema,
-                             allowed_tools=[])
+    contract = AgentContract(
+        role="planner",
+        agent_version="1.0.0",
+        role_prompt="p",
+        input_schema={"type": "object"},
+        output_schema=schema,
+        allowed_tools=[],
+    )
     ClaudeCliRunner(cwd=".").run(contract, {"charter": "x"})
     cmd = captured["cmd"]
     assert "--json-schema" in cmd

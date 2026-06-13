@@ -9,12 +9,24 @@ from pathlib import Path
 class GitError(Exception):
     pass
 
-_FORBIDDEN = [".cih/*", ".cih", ".harness/*", ".consult/*",
-              "**/.cih/*", "*.pem", "*.key",
-              "secrets/*", "secrets", "**/secrets/*"]
+
+_FORBIDDEN = [
+    ".cih/*",
+    ".cih",
+    ".harness/*",
+    ".consult/*",
+    "**/.cih/*",
+    "*.pem",
+    "*.key",
+    "secrets/*",
+    "secrets",
+    "**/secrets/*",
+]
+
 
 def forbidden_paths() -> list[str]:
     return list(_FORBIDDEN)
+
 
 def _matches(path: str, pat: str) -> bool:
     if fnmatch.fnmatch(path, pat):
@@ -25,6 +37,7 @@ def _matches(path: str, pat: str) -> bool:
         if path == base or path.startswith(base + "/"):
             return True
     return False
+
 
 def validate_no_forbidden(paths: list[str], patterns: list[str]) -> None:
     for p in paths:
@@ -40,23 +53,25 @@ def validate_no_forbidden(paths: list[str], patterns: list[str]) -> None:
             if _matches(p, pat) or _matches(norm, pat):
                 raise GitError(f"path '{p}' matches forbidden pattern '{pat}'")
 
+
 def assert_clean_tree(repo, log=None) -> None:
     out = run_git(["status", "--porcelain"], cwd=repo, log=log)
     if out.strip():
         raise GitError(f"target base tree is not clean: {repo}")
+
 
 def _assert_git_allowed(args) -> None:
     sub = next((a for a in args if not a.startswith("-")), None)
     if sub in {"push", "remote"}:
         raise GitError(f"git '{sub}' is blocked by the harness (no-push invariant)")
     if sub == "add":
-        after = args[args.index("add") + 1:]
+        after = args[args.index("add") + 1 :]
         flags = {a for a in after if a.startswith("-")}
         if {"-A", "--all", "-a"} & flags or "." in after:
             raise GitError("git 'add -A/--all/.' is blocked; use the explicit staging wrapper")
 
-def run_git(args: list[str], cwd: Path,
-            log: Callable[[str], None] | None = None) -> str:
+
+def run_git(args: list[str], cwd: Path, log: Callable[[str], None] | None = None) -> str:
     _assert_git_allowed(args)
     cmd = ["git", *args]
     if log:

@@ -4,6 +4,7 @@
 `run_git(..., log=...)` is recorded here, so the harness can prove the
 safety/audit invariant that "every git command is logged."
 """
+
 import os
 import shlex
 import subprocess
@@ -33,7 +34,11 @@ def notify(state_dir, line: str) -> None:
     if not cmd:
         return
     try:
-        subprocess.run([*shlex.split(cmd), line], check=False,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            [*shlex.split(cmd), line],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except Exception:
         pass  # notifications are best-effort; never break the loop

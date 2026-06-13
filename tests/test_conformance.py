@@ -23,6 +23,7 @@ def test_canned_response_is_schema_valid(role):
 
 def test_bad_response_rejected_for_every_role():
     from cih.contracts import OutputValidationError
+
     contracts = load_contracts()
     runner = StubRunner(responses={r: {"garbage": True} for r in ROLE_NAMES})
     for role in ROLE_NAMES:

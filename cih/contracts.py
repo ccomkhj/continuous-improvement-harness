@@ -9,6 +9,7 @@ from jsonschema import ValidationError, validate
 class OutputValidationError(Exception):
     pass
 
+
 @dataclass
 class AgentContract:
     role: str
@@ -26,9 +27,15 @@ class AgentContract:
             raise OutputValidationError(f"{self.role} output invalid: {e.message}") from e
 
     def prompt_hash(self) -> str:
-        blob = json.dumps({"prompt": self.role_prompt, "in": self.input_schema,
-                           "out": self.output_schema, "v": self.agent_version,
-                           "tools": self.allowed_tools,
-                           "adapter": self.runtime_adapter_settings},
-                          sort_keys=True)
+        blob = json.dumps(
+            {
+                "prompt": self.role_prompt,
+                "in": self.input_schema,
+                "out": self.output_schema,
+                "v": self.agent_version,
+                "tools": self.allowed_tools,
+                "adapter": self.runtime_adapter_settings,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
