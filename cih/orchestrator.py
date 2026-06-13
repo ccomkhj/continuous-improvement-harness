@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from cih.config import RunConfig
+from cih.dispatch import plan_dispatch
 from cih.ledger import Ledger, Opportunity, fingerprint
 from cih.merge_queue import MergeOutcome
 from cih.progress import append_progress, notify
@@ -121,7 +122,23 @@ class Orchestrator:
                     f"opportunities, {len(audit.get('charters', []))} charters",
                 )
 
-                charters = audit.get("charters", [])[: self.cfg.max_teams_per_iteration]
+                # Coordinate the team: resolve each charter's opportunity, gate
+                # out ones the ledger says aren't actionable (cooling/expired/
+                # merged/below-threshold), and de-conflict overlapping files.
+                plan = plan_dispatch(
+                    audit.get("charters", []),
+                    audit.get("opportunities", []),
+                    self.ledger,
+                    self.cfg.value_threshold,
+                    current_iteration=i,
+                )
+                if plan.deferred:
+                    append_progress(
+                        self.state_dir,
+                        f"iter {i}: deferred {len(plan.deferred)} charter(s): "
+                        + "; ".join(f"{d['id']} ({d['reason']})" for d in plan.deferred),
+                    )
+                charters = plan.dispatch[: self.cfg.max_teams_per_iteration]
                 if self.cfg.budget_cap is not None:
                     charters = charters[: max(0, self.cfg.budget_cap - teams_run)]
                 append_progress(
@@ -139,9 +156,12 @@ class Orchestrator:
                     f"rejected={sorted(outcome.rejected)}",
                 )
 
-                # mark the ledger from the integration outcome (drives convergence)
+                # mark the ledger from the integration outcome (drives convergence).
+                # fp_by_team comes from the dispatch plan, restricted to the teams
+                # that survived the max-teams/budget slice above.
+                dispatched_ids = {c["id"] for c in charters}
                 fp_by_team = {
-                    c["id"]: c["opportunity_fp"] for c in charters if c.get("opportunity_fp")
+                    tid: fp for tid, fp in plan.fp_by_team.items() if tid in dispatched_ids
                 }
 
                 # ledger_fp is called synchronously within this iteration, so the
@@ -195,6 +215,7 @@ class Orchestrator:
                         }
                         for r in results
                     ],
+                    "deferred": plan.deferred,
                     "dry": dry,
                 }
                 write_state(iter_dir / "teams.json", iter_header, teams_body)

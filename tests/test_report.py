@@ -152,6 +152,40 @@ def test_iteration_card_shows_dry_flag(tmp_path):
     assert "True" in html
 
 
+def test_iteration_card_renders_deferred_charters(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    teams_body = {
+        "charters": [{"id": "team-01"}],
+        "results": [
+            {
+                "team_id": "team-01",
+                "passed": True,
+                "reason": "passed",
+                "merged": True,
+                "rejected": False,
+            },
+        ],
+        "deferred": [{"id": "team-02", "reason": "opportunity cooldown"}],
+        "dry": False,
+    }
+    _write(tmp_path / "iterations" / "iter-001" / "teams.json", "open", teams_body)
+    html = render_report(tmp_path)
+    assert "s-deferred" in html
+    assert "team-02" in html
+    assert "opportunity cooldown" in html
+
+
+def test_iteration_card_tolerates_missing_deferred(tmp_path):
+    _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
+    teams_body = {
+        "charters": [{"id": "team-01"}],
+        "results": [],
+    }
+    _write(tmp_path / "iterations" / "iter-001" / "teams.json", "open", teams_body)
+    html = render_report(tmp_path)  # must not raise when 'deferred' key is absent
+    assert "deferred 0" in html
+
+
 def test_iteration_card_tolerates_missing_dry(tmp_path):
     _write(tmp_path / "run.json", "in_progress", {"mode": "fixed-N", "target_repo": "/t"})
     teams_body = {

@@ -132,11 +132,22 @@ def _render_one_iteration(d: Path) -> str:
         for r in results
         if isinstance(r, dict)
     )
+    deferred = body.get("deferred", [])
+    if not isinstance(deferred, list):
+        deferred = []
+    deferred_lines = "".join(
+        "<li>"
+        f"{_esc(d.get('id'))} <span class='badge s-deferred'>deferred</span> "
+        f"<span class='muted'>{_esc(d.get('reason', ''))}</span></li>"
+        for d in deferred
+        if isinstance(d, dict)
+    )
     return (
         f"<div class='iter'><b>Iteration {_esc(num)}</b> "
         f"<span class='muted'>charters {len(body.get('charters', []))} &middot; "
-        f"merged {_esc(merged)} &middot; rejected {_esc(rejected)} &middot; dry {_esc(dry)}</span>"
-        f"<ul>{team_lines}</ul></div>"
+        f"merged {_esc(merged)} &middot; rejected {_esc(rejected)} &middot; "
+        f"deferred {len(deferred)} &middot; dry {_esc(dry)}</span>"
+        f"<ul>{team_lines}{deferred_lines}</ul></div>"
     )
 
 
