@@ -21,11 +21,13 @@ blocked at the wrapper level. Runs as an interactive CLI (with a `--non-interact
 ```mermaid
 flowchart TB
     ORCH["orchestrator · pure control flow"] --> HP["high-planner<br/>audit → ledger → charters"]
+    HP --> DISP{"dispatch gate<br/>ledger actionable?<br/>files disjoint?"}
+    DISP -->|defer| ORCH
     subgraph teams["isolated teams · one worktree each<br/>(run sequentially)"]
         T1["planner → plan-reviewer →<br/>executor → tdd_verifier (pytest) →<br/>execution-reviewer"]
         T2["team-NN …"]
     end
-    HP --> T1 & T2
+    DISP -->|dispatch| T1 & T2
     T1 & T2 --> MQ["merge queue<br/>merge → re-verify → advance head"]
     MQ --> DEC{"ledger dry / N reached?"}
     DEC -->|no| ORCH
@@ -33,12 +35,18 @@ flowchart TB
 ```
 
 A **high-planner** scores improvement opportunities and splits them into independent charters
-(meant to touch disjoint files). Each charter runs a five-stage pipeline — planner →
-plan-reviewer → executor → mechanical pytest verifier → execution-reviewer — in its own disposable
-worktree; teams run **sequentially** (the worktrees keep them isolated). Passing teams merge
-**one at a time** through a queue that merges onto the integration base, re-runs the full suite,
-then advances the integration head — so any cross-team conflict is caught there. An **opportunity
-ledger** remembers what's been tried, cools down failures, and drives the run to convergence.
+(meant to touch disjoint files), each linked to the opportunity it advances by index. Before
+dispatching, the orchestrator **gates** each charter against the ledger: a charter whose
+opportunity is cooling down, already merged, expired, or below the value threshold is **deferred**
+rather than run, and two charters that would touch the same file are de-conflicted so only one
+runs that iteration (the other is deferred to a later one). Each dispatched charter runs a
+five-stage pipeline — planner → plan-reviewer → executor → mechanical pytest verifier →
+execution-reviewer — in its own disposable worktree; teams run **sequentially** (the worktrees
+keep them isolated). Passing teams merge **one at a time** through a queue that merges onto the
+integration base, re-runs the full suite, then advances the integration head — so any cross-team
+conflict is caught there. An **opportunity ledger** remembers what's been tried, cools down
+failures, and — because the orchestrator both marks it from each merge outcome and reads it back to
+gate the next dispatch — drives the run to convergence instead of re-running settled work.
 
 ## Quick start
 

@@ -147,6 +147,106 @@ def test_until_converged_converges_when_work_is_merged(tmp_path):
     assert summary["iterations_run"] < cfg.max_iterations
 
 
+def _opp_dict(title, scope, value=0.9):
+    return {
+        "title": title,
+        "scope": scope,
+        "value": value,
+        "confidence": 0.9,
+        "effort": 0.1,
+        "risk": 0.1,
+        "rationale": "r",
+    }
+
+
+def test_charter_links_opportunity_by_index_drives_ledger(tmp_path):
+    """Production-shaped: the high-planner emits a charter that references its
+    opportunity by index (never a fingerprint — it is forbidden from computing
+    one). The orchestrator resolves the fp itself, so a merge actually marks the
+    ledger opportunity terminal."""
+    cfg = _cfg(tmp_path, iterations=1)
+    title, scope = "indexed work", "scope-1"
+    fp = fingerprint(title, scope)
+
+    def high_planner(ctx):
+        return {
+            "opportunities": [_opp_dict(title, scope)],
+            "charters": [{"id": "team-01", "opportunity_index": 0}],
+        }
+
+    def team_runner(charters, ctx):
+        return [TeamResult(team_id=c["id"], passed=True) for c in charters]
+
+    orch = Orchestrator(
+        cfg,
+        high_planner_fn=high_planner,
+        team_runner_fn=team_runner,
+        integrate_fn=lambda results, ctx: MergeOutcome(merged=[r.team_id for r in results]),
+    )
+    orch.run()
+    assert orch.ledger.get(fp).state == "merged"
+
+
+def test_cooldown_opportunity_is_not_redispatched(tmp_path):
+    """A rejected opportunity cools down; while cooling, the orchestrator does
+    NOT dispatch a team for it even though the high-planner keeps re-proposing
+    it — and re-dispatches once the cooldown elapses."""
+    cfg = _cfg(
+        tmp_path,
+        mode="until-converged",
+        iterations=None,
+        convergence_dry_streak=99,
+        max_iterations=4,
+        cooldown_iterations=2,
+        opportunity_max_attempts=9,
+    )
+    title, scope = "flaky", "scope-1"
+    dispatched: list[list[str]] = []
+
+    def high_planner(ctx):
+        return {
+            "opportunities": [_opp_dict(title, scope)],
+            "charters": [{"id": "team-01", "opportunity_index": 0}],
+        }
+
+    def team_runner(charters, ctx):
+        dispatched.append([c["id"] for c in charters])
+        return [TeamResult(team_id=c["id"], passed=True) for c in charters]
+
+    orch = Orchestrator(
+        cfg,
+        high_planner_fn=high_planner,
+        team_runner_fn=team_runner,
+        integrate_fn=lambda results, ctx: MergeOutcome(rejected=[r.team_id for r in results]),
+    )
+    orch.run()
+    # iter1 dispatch -> reject -> cools until iter3; iter2 deferred (cooling);
+    # iter3 reopened -> dispatch -> reject -> cools until iter5; iter4 deferred.
+    assert dispatched == [["team-01"], [], ["team-01"], []]
+
+
+def test_overlapping_charters_defer_later_one(tmp_path):
+    cfg = _cfg(tmp_path, iterations=1)
+
+    def high_planner(ctx):
+        return {
+            "opportunities": [],
+            "charters": [
+                {"id": "team-01", "impact_manifest": {"intended_files": ["a.py"]}},
+                {"id": "team-02", "impact_manifest": {"intended_files": ["a.py", "b.py"]}},
+            ],
+        }
+
+    def team_runner(charters, ctx):
+        return [TeamResult(team_id=c["id"], passed=True) for c in charters]
+
+    orch = Orchestrator(cfg, high_planner_fn=high_planner, team_runner_fn=team_runner)
+    orch.run()
+    body = read_state(Path(cfg.state_dir, "iterations", "iter-001", "teams.json"))["body"]
+    assert [c["id"] for c in body["charters"]] == ["team-01"]
+    assert [d["id"] for d in body["deferred"]] == ["team-02"]
+
+
 def test_run_persists_ledger_json(tmp_path):
     cfg = _cfg(tmp_path, iterations=1)
     title, scope = "persist me", "scope-1"
