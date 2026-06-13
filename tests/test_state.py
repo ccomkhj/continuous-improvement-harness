@@ -1,12 +1,16 @@
-import json
-from pathlib import Path
-from cih.state import StateHeader, write_state, read_state, SCHEMA_VERSION
+from cih.state import SCHEMA_VERSION, StateHeader, read_state, write_state
+
 
 def _header():
     return StateHeader(
-        run_id="run-1", iteration_id="iter-001", team_id=None,
-        attempt_id=None, status="open", owner="orchestrator",
+        run_id="run-1",
+        iteration_id="iter-001",
+        team_id=None,
+        attempt_id=None,
+        status="open",
+        owner="orchestrator",
     )
+
 
 def test_write_then_read_roundtrips_with_header(tmp_path):
     path = tmp_path / "run.json"
@@ -19,11 +23,13 @@ def test_write_then_read_roundtrips_with_header(tmp_path):
     assert doc["body"] == {"mode": "fixed-N"}
     assert "created_at" in doc and "updated_at" in doc
 
+
 def test_write_is_atomic_no_temp_left_behind(tmp_path):
     path = tmp_path / "run.json"
     write_state(path, _header(), {"x": 1})
     leftovers = [p.name for p in tmp_path.iterdir() if p.name != "run.json"]
     assert leftovers == []
+
 
 def test_rewrite_preserves_created_at_bumps_updated_at(tmp_path):
     path = tmp_path / "run.json"

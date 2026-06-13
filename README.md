@@ -108,11 +108,20 @@ autonomous run lives in its own workspace, not the scoping session.
   `<state_dir>/progress.md` (`tail -F` it to follow a run live); set `CIH_NOTIFY_CMD` to a notifier
   command (e.g. one that calls `osascript`) to also get a desktop notification per milestone.
 
-## Tests
+## Development
 
 ```bash
-python -m pytest -q
+pip install -e ".[dev]"   # installs pytest + ruff
+python -m pytest -q        # run the suite
+ruff check .               # lint
+ruff format .              # format (CI checks this with `ruff format --check .`)
+```
+
+`git blame` skips the bulk reformat commit via `.git-blame-ignore-revs`. GitHub honors it
+automatically; enable it locally with:
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
 > Full config lives in `RunConfig` (`cih/config.py`); role prompts in `.claude/agents/`.
-</content>

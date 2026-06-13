@@ -1,11 +1,17 @@
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from cih.safety import run_git, GitError
+
+from cih.safety import GitError, run_git
+
+# Bound every test-command run so a hanging suite can't stall verification
+# forever. A genuine hang is unbounded; this ceiling only trips real wedges.
+TEST_DEFAULT_TIMEOUT = 1800.0
+
 
 @dataclass
 class TddVerdict:
-    eligible: bool          # could we mechanically prove anything?
+    eligible: bool  # could we mechanically prove anything?
     passed: bool
     reason: str = ""
     baseline_ok: bool = False
@@ -17,29 +23,47 @@ class TddVerdict:
     red_sha: str = ""
     green_sha: str = ""
 
+
 def _checkout(repo: Path, sha: str):
     run_git(["checkout", "-q", "--force", sha], cwd=repo)
 
-def _run(repo: Path, cmd: list[str]) -> int:
-    return subprocess.run(cmd, cwd=str(repo), capture_output=True, text=True).returncode
+
+def _run(repo: Path, cmd: list[str], timeout: float | None = TEST_DEFAULT_TIMEOUT) -> int:
+    return subprocess.run(
+        cmd, cwd=str(repo), capture_output=True, text=True, timeout=timeout
+    ).returncode
+
 
 def _is_clean(repo: Path) -> bool:
     return run_git(["status", "--porcelain"], cwd=repo).strip() == ""
+
 
 def _changed_paths(repo: Path, base: str, head: str) -> list[str]:
     out = run_git(["diff", "--name-only", base, head], cwd=repo)
     return [p for p in out.splitlines() if p.strip()]
 
+
 def _is_test_path(p: str, declared: list[str]) -> bool:
     name = Path(p).name
     return p in declared or name.startswith("test_") or name.endswith("_test.py")
 
-def verify_tdd(repo: Path, red_sha: str, green_sha: str,
-               test_command: list[str], declared_test_paths: list[str],
-               adapter: str = "pytest") -> TddVerdict:
+
+def verify_tdd(
+    repo: Path,
+    red_sha: str,
+    green_sha: str,
+    test_command: list[str],
+    declared_test_paths: list[str],
+    adapter: str = "pytest",
+) -> TddVerdict:
     repo = Path(repo)
-    v = TddVerdict(eligible=(adapter == "pytest"), passed=False,
-                   command=test_command, red_sha=red_sha, green_sha=green_sha)
+    v = TddVerdict(
+        eligible=(adapter == "pytest"),
+        passed=False,
+        command=test_command,
+        red_sha=red_sha,
+        green_sha=green_sha,
+    )
     if not v.eligible:
         v.reason = f"no mechanical adapter for '{adapter}'; reviewer-only fallback"
         return v
@@ -102,7 +126,9 @@ def verify_tdd(repo: Path, red_sha: str, green_sha: str,
         # obvious weakening hard-blocks; subtle ones flagged for reviewer
         red_test_blob = "\n".join(
             run_git(["show", f"{red_sha}:{p}"], cwd=repo)
-            for p in red_changes if _is_test_path(p, declared_test_paths))
+            for p in red_changes
+            if _is_test_path(p, declared_test_paths)
+        )
         if "@pytest.mark.skip" in red_test_blob or "pytest.skip(" in red_test_blob:
             v.reason = "test introduces skip markers"
             return v

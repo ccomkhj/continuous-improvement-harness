@@ -1,12 +1,14 @@
 # cih/orchestrator.py
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+
 from cih.config import RunConfig
-from cih.state import StateHeader, write_state, read_state
 from cih.ledger import Ledger, Opportunity, fingerprint
 from cih.merge_queue import MergeOutcome
 from cih.progress import append_progress, notify
+from cih.state import StateHeader, read_state, write_state
+
 
 @dataclass
 class IterationResult:
@@ -15,10 +17,17 @@ class IterationResult:
     team_results: list = field(default_factory=list)
     dry: bool = False
 
+
 class Orchestrator:
-    def __init__(self, cfg: RunConfig, high_planner_fn: Callable,
-                 team_runner_fn: Callable, integrate_fn: Optional[Callable] = None,
-                 run_id: str = "run-1", on_iteration_end: Optional[Callable] = None):
+    def __init__(
+        self,
+        cfg: RunConfig,
+        high_planner_fn: Callable,
+        team_runner_fn: Callable,
+        integrate_fn: Callable | None = None,
+        run_id: str = "run-1",
+        on_iteration_end: Callable | None = None,
+    ):
         self.cfg = cfg
         self.high_planner_fn = high_planner_fn
         self.team_runner_fn = team_runner_fn
@@ -27,25 +36,38 @@ class Orchestrator:
         self.on_iteration_end = on_iteration_end
         self.state_dir = Path(cfg.state_dir)
         led_path = self.state_dir / "ledger.json"
-        self.ledger = (Ledger.from_dict(read_state(led_path)["body"])
-                       if led_path.exists() else Ledger())
+        self.ledger = (
+            Ledger.from_dict(read_state(led_path)["body"]) if led_path.exists() else Ledger()
+        )
 
     def _ingest_opportunities(self, audit: dict) -> None:
         for o in audit.get("opportunities", []):
-            self.ledger.upsert(Opportunity(
-                fp=fingerprint(o["title"], o["scope"]), title=o["title"],
-                scope=o["scope"], value=o["value"], confidence=o["confidence"],
-                effort=o["effort"], risk=o["risk"], rationale=o["rationale"]))
+            self.ledger.upsert(
+                Opportunity(
+                    fp=fingerprint(o["title"], o["scope"]),
+                    title=o["title"],
+                    scope=o["scope"],
+                    value=o["value"],
+                    confidence=o["confidence"],
+                    effort=o["effort"],
+                    risk=o["risk"],
+                    rationale=o["rationale"],
+                )
+            )
 
     def _persist_run(self, status: str, body: dict) -> None:
-        write_state(self.state_dir / "run.json",
-                    StateHeader(self.run_id, None, None, None, status, "orchestrator"),
-                    body)
+        write_state(
+            self.state_dir / "run.json",
+            StateHeader(self.run_id, None, None, None, status, "orchestrator"),
+            body,
+        )
 
     def _persist_ledger(self, status: str) -> None:
-        write_state(self.state_dir / "ledger.json",
-                    StateHeader(self.run_id, None, None, None, status, "orchestrator"),
-                    self.ledger.to_dict())
+        write_state(
+            self.state_dir / "ledger.json",
+            StateHeader(self.run_id, None, None, None, status, "orchestrator"),
+            self.ledger.to_dict(),
+        )
 
     def _fire_iteration_end(self) -> None:
         if self.on_iteration_end is None:
@@ -54,6 +76,7 @@ class Orchestrator:
             self.on_iteration_end()
         except Exception as e:  # best-effort: never abort the run
             from cih.progress import append_progress
+
             append_progress(self.state_dir, f"on_iteration_end callback failed: {e}")
 
     def run(self) -> dict:
@@ -79,17 +102,24 @@ class Orchestrator:
 
                 i = iterations_run + 1
                 append_progress(self.state_dir, f"## iteration {i} start")
-                ctx = {"iteration": i, "target_repo": self.cfg.target_repo,
-                       "focus_areas": self.cfg.focus_areas, "brief": self.cfg.brief,
-                       "ledger": self.ledger.to_dict()}
-                notify(self.state_dir,
-                       f"iter {i}: high-planner audit started (can take a few minutes)…")
+                ctx = {
+                    "iteration": i,
+                    "target_repo": self.cfg.target_repo,
+                    "focus_areas": self.cfg.focus_areas,
+                    "brief": self.cfg.brief,
+                    "ledger": self.ledger.to_dict(),
+                }
+                notify(
+                    self.state_dir,
+                    f"iter {i}: high-planner audit started (can take a few minutes)…",
+                )
                 audit = self.high_planner_fn(ctx)
                 self._ingest_opportunities(audit)
                 notify(
                     self.state_dir,
                     f"iter {i}: audit done — {len(audit.get('opportunities', []))} "
-                    f"opportunities, {len(audit.get('charters', []))} charters")
+                    f"opportunities, {len(audit.get('charters', []))} charters",
+                )
 
                 charters = audit.get("charters", [])[: self.cfg.max_teams_per_iteration]
                 if self.cfg.budget_cap is not None:
@@ -97,7 +127,8 @@ class Orchestrator:
                 append_progress(
                     self.state_dir,
                     f"iter {i}: dispatching {len(charters)} team(s): "
-                    f"{[c.get('id') for c in charters]}")
+                    f"{[c.get('id') for c in charters]}",
+                )
                 results = self.team_runner_fn(charters, ctx)
                 if self.cfg.budget_cap is not None:
                     teams_run += len(charters)
@@ -105,14 +136,18 @@ class Orchestrator:
                 notify(
                     self.state_dir,
                     f"iter {i}: integrated — merged={sorted(outcome.merged)} "
-                    f"rejected={sorted(outcome.rejected)}")
+                    f"rejected={sorted(outcome.rejected)}",
+                )
 
                 # mark the ledger from the integration outcome (drives convergence)
-                fp_by_team = {c["id"]: c["opportunity_fp"]
-                              for c in charters if c.get("opportunity_fp")}
+                fp_by_team = {
+                    c["id"]: c["opportunity_fp"] for c in charters if c.get("opportunity_fp")
+                }
 
+                # ledger_fp is called synchronously within this iteration, so the
+                # late-binding of fp_by_team that B023 warns about cannot bite here.
                 def ledger_fp(team_id):
-                    fp = fp_by_team.get(team_id)
+                    fp = fp_by_team.get(team_id)  # noqa: B023
                     return fp if fp and self.ledger.get(fp) else None
 
                 for tid in outcome.merged:
@@ -123,22 +158,27 @@ class Orchestrator:
                     fp = ledger_fp(tid)
                     if fp:
                         self.ledger.record_attempt_failure(
-                            fp, current_iteration=i,
+                            fp,
+                            current_iteration=i,
                             cooldown_iterations=self.cfg.cooldown_iterations,
-                            max_attempts=self.cfg.opportunity_max_attempts)
+                            max_attempts=self.cfg.opportunity_max_attempts,
+                        )
 
                 iterations_run = i
 
                 dry = self.ledger.is_dry(self.cfg.value_threshold, current_iteration=i)
                 dry_streak = dry_streak + 1 if dry else 0
-                append_progress(self.state_dir,
-                                f"iter {i}: done (dry={dry}, dry_streak={dry_streak})")
-                iteration_results.append(IterationResult(
-                    iteration=i, charters=charters, team_results=results, dry=dry))
+                append_progress(
+                    self.state_dir, f"iter {i}: done (dry={dry}, dry_streak={dry_streak})"
+                )
+                iteration_results.append(
+                    IterationResult(iteration=i, charters=charters, team_results=results, dry=dry)
+                )
 
                 iter_dir = self.state_dir / "iterations" / f"iter-{i:03d}"
-                iter_header = StateHeader(self.run_id, f"iter-{i:03d}", None, None,
-                                          "open", "orchestrator")
+                iter_header = StateHeader(
+                    self.run_id, f"iter-{i:03d}", None, None, "open", "orchestrator"
+                )
                 write_state(iter_dir / "audit.json", iter_header, audit)
 
                 # spec §10 observability artifacts (orchestrator-owned)
@@ -146,11 +186,13 @@ class Orchestrator:
                 teams_body = {
                     "charters": charters,
                     "results": [
-                        {"team_id": getattr(r, "team_id", None),
-                         "passed": getattr(r, "passed", None),
-                         "reason": getattr(r, "reason", ""),
-                         "merged": getattr(r, "team_id", None) in merged_set,
-                         "rejected": getattr(r, "team_id", None) in rejected_set}
+                        {
+                            "team_id": getattr(r, "team_id", None),
+                            "passed": getattr(r, "passed", None),
+                            "reason": getattr(r, "reason", ""),
+                            "merged": getattr(r, "team_id", None) in merged_set,
+                            "rejected": getattr(r, "team_id", None) in rejected_set,
+                        }
                         for r in results
                     ],
                     "dry": dry,
@@ -158,34 +200,47 @@ class Orchestrator:
                 write_state(iter_dir / "teams.json", iter_header, teams_body)
 
                 iter_dir.mkdir(parents=True, exist_ok=True)
-                lines = [f"# Iteration {i}", "",
-                         f"- charters dispatched: {len(charters)}",
-                         f"- merged: {sorted(merged_set)}",
-                         f"- rejected: {sorted(rejected_set)}",
-                         f"- dry: {dry}", ""]
+                lines = [
+                    f"# Iteration {i}",
+                    "",
+                    f"- charters dispatched: {len(charters)}",
+                    f"- merged: {sorted(merged_set)}",
+                    f"- rejected: {sorted(rejected_set)}",
+                    f"- dry: {dry}",
+                    "",
+                ]
                 (iter_dir / "iteration.md").write_text("\n".join(lines))
 
                 self._persist_ledger("in_progress")
                 self._fire_iteration_end()
 
-                if self.cfg.mode == "until-converged" and dry_streak >= self.cfg.convergence_dry_streak:
+                if (
+                    self.cfg.mode == "until-converged"
+                    and dry_streak >= self.cfg.convergence_dry_streak
+                ):
                     stopped_reason = "converged"
                     break
         except BaseException as e:
-            notify(self.state_dir,
-                   f"# run FAILED — {type(e).__name__}: {e} "
-                   f"(after {iterations_run} iteration(s))")
-            summary = {"iterations_run": iterations_run, "stopped_reason": "failed",
-                       "error": f"{type(e).__name__}: {e}",
-                       "iterations": len(iteration_results)}
+            notify(
+                self.state_dir,
+                f"# run FAILED — {type(e).__name__}: {e} (after {iterations_run} iteration(s))",
+            )
+            summary = {
+                "iterations_run": iterations_run,
+                "stopped_reason": "failed",
+                "error": f"{type(e).__name__}: {e}",
+                "iterations": len(iteration_results),
+            }
             self._persist_run("failed", {"config": self.cfg.to_dict(), "summary": summary})
             self._persist_ledger("failed")
             raise
 
-        notify(self.state_dir,
-               f"# run done — {stopped_reason}, {iterations_run} iteration(s)")
-        summary = {"iterations_run": iterations_run, "stopped_reason": stopped_reason,
-                   "iterations": len(iteration_results)}
+        notify(self.state_dir, f"# run done — {stopped_reason}, {iterations_run} iteration(s)")
+        summary = {
+            "iterations_run": iterations_run,
+            "stopped_reason": stopped_reason,
+            "iterations": len(iteration_results),
+        }
         self._persist_run("done", {"config": self.cfg.to_dict(), "summary": summary})
         self._persist_ledger("done")
         # Final fire AFTER the done persist so the report renders against the
@@ -201,10 +256,12 @@ class Orchestrator:
             td()
         return summary
 
+
 def reconcile(cfg: RunConfig, run_id: str) -> dict:
     """Compare persisted state against git ground truth before resuming (spec §10)."""
     import json
-    from cih.safety import run_git, GitError
+
+    from cih.safety import GitError, run_git
 
     issues = []
     state_dir = Path(cfg.state_dir)

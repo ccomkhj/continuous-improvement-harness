@@ -1,7 +1,13 @@
 import pytest
-from cih import scoping
-from cih.scoping import StubAsker, _to_choices, _ask_positive_int
+
 from cih.config import ConfigError
+from cih.scoping import (
+    QuestionaryAsker,
+    StubAsker,
+    _ask_positive_int,
+    _to_choices,
+    run_scoping_interview,
+)
 
 
 def test_to_choices_maps_label_value_pairs():
@@ -44,9 +50,6 @@ def test_ask_positive_int_reasks_on_zero_or_negative():
     assert any("positive" in n for n in asker.notes)
 
 
-from cih.scoping import run_scoping_interview, QuestionaryAsker
-
-
 def _abs(tmp_path, name):
     p = tmp_path / name
     p.mkdir()
@@ -82,10 +85,22 @@ def test_interview_merges_preset_and_other_focus(tmp_path):
 
 def test_interview_confirm_no_then_yes_loops_once(tmp_path):
     t, s = _abs(tmp_path, "t"), _abs(tmp_path, "s")
-    asker = StubAsker([
-        "fixed-N", "1", ["tests"], "", 0.5, False,
-        "until-converged", "9", [], "", 0.3, True,
-    ])
+    asker = StubAsker(
+        [
+            "fixed-N",
+            "1",
+            ["tests"],
+            "",
+            0.5,
+            False,
+            "until-converged",
+            "9",
+            [],
+            "",
+            0.3,
+            True,
+        ]
+    )
     cfg = run_scoping_interview(t, s, asker)
     assert cfg.mode == "until-converged"
     assert cfg.max_iterations == 9

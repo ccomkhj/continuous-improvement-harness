@@ -3,11 +3,13 @@ import json
 import re
 import subprocess
 from typing import Protocol
+
 from cih.contracts import AgentContract
 
 # Matches a fenced block: ```json ... ``` or ``` ... ``` (language tag optional).
 # DOTALL so the body spans newlines; non-greedy so each fence is captured separately.
 _FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.DOTALL | re.IGNORECASE)
+
 
 def _extract_json(text):
     """Extract a JSON object from model text that may be bare JSON, wrapped in a
@@ -36,19 +38,22 @@ def _extract_json(text):
     start, end = text.find("{"), text.rfind("}")
     if start != -1 and end > start:
         try:
-            return json.loads(text[start:end + 1])
+            return json.loads(text[start : end + 1])
         except json.JSONDecodeError as e:
             last_err = e
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
-        raise (last_err or e)
+        raise (last_err or e) from e
+
 
 class AgentRunner(Protocol):
     def run(self, contract: AgentContract, input_data: dict) -> dict: ...
 
+
 class StubRunner:
     """Test double: returns canned responses keyed by role."""
+
     def __init__(self, responses: dict):
         self.responses = responses
         self.calls: list[dict] = []
@@ -59,28 +64,55 @@ class StubRunner:
             raise KeyError(f"no stub response for role {contract.role}")
         return self.responses[contract.role]
 
+
 class ClaudeCliRunner:
     """Headless adapter: drives `claude -p --append-system-prompt`.
 
     Flags precede the prompt; output is expected as JSON on stdout.
     """
-    def __init__(self, cwd: str, extra_args: list[str] | None = None):
+
+    # Bound the LLM call so a wedged `claude -p` can't block the run forever.
+    AGENT_DEFAULT_TIMEOUT = 1800.0
+
+    def __init__(
+        self,
+        cwd: str,
+        extra_args: list[str] | None = None,
+        timeout: float | None = AGENT_DEFAULT_TIMEOUT,
+    ):
         self.cwd = cwd
         self.extra_args = extra_args or []
+        self.timeout = timeout
 
     def run(self, contract: AgentContract, input_data: dict) -> dict:
         prompt = json.dumps(input_data)
-        cmd = ["claude", "-p", "--output-format", "json",
-               "--json-schema", json.dumps(contract.output_schema),
-               "--append-system-prompt", contract.role_prompt,
-               *self.extra_args, "--", prompt]
-        proc = subprocess.run(cmd, cwd=self.cwd, capture_output=True, text=True)
+        cmd = [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--json-schema",
+            json.dumps(contract.output_schema),
+            "--append-system-prompt",
+            contract.role_prompt,
+            *self.extra_args,
+            "--",
+            prompt,
+        ]
+        try:
+            proc = subprocess.run(
+                cmd, cwd=self.cwd, capture_output=True, text=True, timeout=self.timeout
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(f"{contract.role}: claude -p timed out after {self.timeout}s") from e
         if proc.returncode != 0:
             raise RuntimeError(f"claude failed for {contract.role}: {proc.stderr}")
         try:
             envelope = json.loads(proc.stdout)
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"{contract.role}: non-JSON stdout from claude -p: {proc.stdout[:500]!r}") from e
+            raise RuntimeError(
+                f"{contract.role}: non-JSON stdout from claude -p: {proc.stdout[:500]!r}"
+            ) from e
         if envelope.get("is_error"):
             raise RuntimeError(f"{contract.role}: claude reported error: {envelope.get('result')}")
         # With --json-schema, claude returns the schema-conforming object in
@@ -100,7 +132,9 @@ class ClaudeCliRunner:
             return _extract_json(result)
         except (TypeError, json.JSONDecodeError) as e:
             from cih.contracts import OutputValidationError
+
             raise OutputValidationError(f"{contract.role}: result was not JSON: {result!r}") from e
+
 
 def invoke(runner: AgentRunner, contract: AgentContract, input_data: dict) -> dict:
     output = runner.run(contract, input_data)

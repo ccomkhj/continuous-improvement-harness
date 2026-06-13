@@ -9,5 +9,5 @@ def test_skill_doc_mentions_all_roles_and_invariants():
     for role in ["high-planner", "planner", "plan-reviewer", "executor", "execution-reviewer"]:
         assert role in text
     assert "worktree" in text
-    assert "never" in text and "push" in text          # no-push invariant documented
+    assert "never" in text and "push" in text  # no-push invariant documented
     assert "git add -a" in text or "git add -a is" in text or "add -a" in text

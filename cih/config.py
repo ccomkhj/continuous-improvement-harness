@@ -1,10 +1,11 @@
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
+
 
 class ConfigError(Exception):
     pass
+
 
 _MODES = {"fixed-N", "until-converged"}
 
@@ -12,7 +13,7 @@ DEPTH_BUDGET = {"low": 3, "medium": 6, "high": 10}
 DEFAULT_DEPTH = "medium"
 
 
-def depth_budget(name: Optional[str] = None) -> int:
+def depth_budget(name: str | None = None) -> int:
     """Map a --depth name to its question budget (upper bound). None → default."""
     if name is None:
         name = DEFAULT_DEPTH
@@ -28,9 +29,9 @@ class RunConfig:
     mode: str
     target_repo: str
     state_dir: str
-    iterations: Optional[int] = None
+    iterations: int | None = None
     max_iterations: int = 25
-    budget_cap: Optional[int] = None
+    budget_cap: int | None = None
     focus_areas: list[str] = field(default_factory=list)
     brief: str = ""
     value_threshold: float = 0.5

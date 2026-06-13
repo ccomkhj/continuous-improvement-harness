@@ -1,24 +1,27 @@
 import json
 import os
 import tempfile
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 
 SCHEMA_VERSION = 1
+
 
 @dataclass
 class StateHeader:
     run_id: str
-    iteration_id: Optional[str]
-    team_id: Optional[str]
-    attempt_id: Optional[str]
+    iteration_id: str | None
+    team_id: str | None
+    attempt_id: str | None
     status: str
     owner: str
 
+
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
+
 
 def write_state(path: Path, header: StateHeader, body: Any) -> None:
     path = Path(path)
@@ -29,8 +32,13 @@ def write_state(path: Path, header: StateHeader, body: Any) -> None:
             created_at = json.loads(path.read_text())["created_at"]
         except (json.JSONDecodeError, KeyError, OSError):
             pass
-    doc = {"schema_version": SCHEMA_VERSION, **asdict(header),
-           "created_at": created_at, "updated_at": _now(), "body": body}
+    doc = {
+        "schema_version": SCHEMA_VERSION,
+        **asdict(header),
+        "created_at": created_at,
+        "updated_at": _now(),
+        "body": body,
+    }
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
@@ -41,6 +49,7 @@ def write_state(path: Path, header: StateHeader, body: Any) -> None:
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
+
 
 def read_state(path: Path) -> dict:
     return json.loads(Path(path).read_text())

@@ -4,6 +4,7 @@ config directory, so `/cih` works in any repo.
 pip ships only the Python package; Claude Code discovers skills/subagents from
 `.claude/` on disk, so they must be copied out of the wheel explicitly.
 """
+
 from importlib.resources import files
 from pathlib import Path
 
