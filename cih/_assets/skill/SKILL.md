@@ -11,6 +11,23 @@ headless. You do NOT run the improvement loop in this session — once the works
 the headless runner (`python -m cih.runner`) owns the loop. State lives under an absolute
 `state_dir` OUTSIDE the target repo.
 
+## At a glance
+
+```
+(1) Scope  — interview the user, synthesize a brief  ──►  writes run.json
+(2) Hand off — spawn a fresh workspace running the loop headless + a watcher  ──►  STOP
+```
+
+Two phases, run **once** in this session, then you stop. The headless runner consumes `run.json`
+and owns everything after the hand-off — read the detailed sections below before acting.
+
+| Input | Default / how it's inferred | Override |
+|-------|-----------------------------|----------|
+| `target_repo` | `$SUPERSET_ROOT_PATH`, else `git rev-parse --show-toplevel` | `--target-repo <abs>` |
+| `state_dir` | `$SUPERSET_HOME_DIR/cih-state/<basename target_repo>` (outside the repo, reused across runs) | `--state-dir <abs>` |
+| Superset project | `projectId` of `$SUPERSET_WORKSPACE_ID`; else path-match in `projects list` | — |
+| `--depth` | question budget: low=3, medium=6 (default), high=10; scoping-only, never in `run.json` | `--depth <level>` |
+
 ## Inputs (all inferred — flags only to override)
 
 Triggered bare (`/cih`), infer everything from the Superset workspace env + git; never ask for
