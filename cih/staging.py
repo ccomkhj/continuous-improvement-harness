@@ -1,8 +1,10 @@
 # cih/staging.py
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
-from cih.safety import run_git, forbidden_paths, validate_no_forbidden, GitError
+
+from cih.safety import GitError, forbidden_paths, run_git, validate_no_forbidden
+
 
 class StagingError(Exception):
     pass
@@ -16,7 +18,7 @@ def _staged_set(repo: Path) -> set:
     return set(out.split())
 
 def stage_files(repo: Path, paths: list[str],
-                log: Optional[Callable[[str], None]] = None) -> None:
+                log: Callable[[str], None] | None = None) -> None:
     if not paths:
         raise StagingError("no paths declared; explicit staging requires at least one file")
 

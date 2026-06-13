@@ -1,10 +1,13 @@
 import subprocess
-import pytest
 from pathlib import Path
-from cih.runner import parse_args, build_config, build_orchestrator, main
+
+import pytest
+
 from cih.agents import StubRunner
-from cih.config import RunConfig, ConfigError
-from cih.safety import assert_clean_tree, GitError
+from cih.config import ConfigError, RunConfig
+from cih.runner import build_config, build_orchestrator, main, parse_args
+from cih.safety import GitError, assert_clean_tree
+
 
 def test_parse_args_fixed_n(tmp_path):
     t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
@@ -239,7 +242,7 @@ def test_parse_args_from_run_json_makes_paths_optional(tmp_path):
 def test_write_run_json_cmd_writes_scoped_config(tmp_path):
     """`cih write-run-json <flags>` serialises a validated config to
     <state_dir>/run.json without running, so a scoping session can hand off."""
-    from cih.runner import main, load_run_json
+    from cih.runner import load_run_json, main
     t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
     code = main(["write-run-json", "--mode", "fixed-N", "--iterations", "2",
                  "--target-repo", str(t), "--state-dir", str(s),
@@ -257,7 +260,7 @@ def test_write_run_json_cmd_writes_scoped_config(tmp_path):
 
 
 def test_parse_args_brief(tmp_path):
-    from cih.runner import parse_args, build_config
+    from cih.runner import build_config, parse_args
     t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
     ns = parse_args(["--mode", "until-converged", "--target-repo", str(t),
                      "--state-dir", str(s), "--brief", "speed up realtime_inventory hot path"])
@@ -267,7 +270,7 @@ def test_parse_args_brief(tmp_path):
 
 def test_write_run_json_persists_brief(tmp_path):
     """The scoped free-form brief survives the write -> load round trip."""
-    from cih.runner import main, load_run_json
+    from cih.runner import load_run_json, main
     t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
     brief = "perf: realtime_inventory only; behavior-identical, pytest green; keep API+schemas"
     code = main(["write-run-json", "--mode", "until-converged",
@@ -287,7 +290,7 @@ def test_write_run_json_cmd_requires_mode(tmp_path):
 def test_load_run_json_round_trips(tmp_path):
     """load_run_json reconstructs the exact RunConfig that was persisted."""
     from cih.runner import load_run_json
-    from cih.state import write_state, StateHeader
+    from cih.state import StateHeader, write_state
     t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
     cfg = RunConfig.create(mode="until-converged", target_repo=str(t),
                            state_dir=str(s), focus_areas=["perf", "tests"],
@@ -301,7 +304,7 @@ def test_load_run_json_round_trips(tmp_path):
 def test_load_run_json_accepts_terminal_run_body(tmp_path):
     """A completed run nests config under body.config; load_run_json handles it."""
     from cih.runner import load_run_json
-    from cih.state import write_state, StateHeader
+    from cih.state import StateHeader, write_state
     t = tmp_path / "t"; s = tmp_path / "s"; t.mkdir(); s.mkdir()
     cfg = RunConfig.create(mode="fixed-N", iterations=1, target_repo=str(t),
                            state_dir=str(s))

@@ -1,7 +1,8 @@
 import subprocess
-import pytest
 from pathlib import Path
+
 from cih.worktree import WorktreeManager
+
 
 def _seed_repo(path: Path) -> str:
     subprocess.run(["git", "init", "-q"], cwd=path, check=True)

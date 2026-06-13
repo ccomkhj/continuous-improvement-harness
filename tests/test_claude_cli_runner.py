@@ -1,6 +1,8 @@
 # tests/test_claude_cli_runner.py
 import json
+
 import pytest
+
 import cih.agents
 from cih.agents import ClaudeCliRunner, _extract_json
 from cih.contracts import AgentContract, OutputValidationError

@@ -1,5 +1,7 @@
 import pytest
-from cih.transitions import Status, is_valid_transition, assert_transition, InvalidTransition
+
+from cih.transitions import InvalidTransition, Status, assert_transition, is_valid_transition
+
 
 def test_open_can_go_in_progress():
     assert is_valid_transition(Status.OPEN, Status.IN_PROGRESS)

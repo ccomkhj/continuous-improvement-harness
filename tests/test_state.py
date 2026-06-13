@@ -1,6 +1,5 @@
-import json
-from pathlib import Path
-from cih.state import StateHeader, write_state, read_state, SCHEMA_VERSION
+from cih.state import SCHEMA_VERSION, StateHeader, read_state, write_state
+
 
 def _header():
     return StateHeader(

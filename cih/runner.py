@@ -1,7 +1,9 @@
 import argparse
 import sys
 from pathlib import Path
+
 from cih.config import RunConfig
+
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
@@ -54,7 +56,7 @@ def write_run_json_cmd(argv: list[str]) -> int:
     <state_dir>/run.json without running, so an interactive scoping session can
     hand the run off to a fresh workspace via `--from-run-json`."""
     from cih.config import ConfigError
-    from cih.state import write_state, StateHeader
+    from cih.state import StateHeader, write_state
     ns = parse_args(argv)
     if ns.mode is None:
         raise ConfigError("--mode is required for write-run-json")
@@ -94,7 +96,8 @@ def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1", report: bo
     state_dir = Path(cfg.state_dir)
 
     # Append-only audit trail of every git command (spec §11).
-    log = lambda line: append_progress(cfg.state_dir, line)
+    def log(line):
+        return append_progress(cfg.state_dir, line)
 
     # Enforced preflight: refuse to run against a dirty target tree (spec §11).
     assert_clean_tree(cfg.target_repo, log=log)
@@ -120,7 +123,7 @@ def build_orchestrator(cfg: RunConfig, runner, run_id: str = "run-1", report: bo
                         run_id=run_id, on_iteration_end=on_iter)
 
 def install_skill_cmd(argv: list[str]) -> int:
-    from cih.install import install_skill, DEFAULT_DEST
+    from cih.install import DEFAULT_DEST, install_skill
     p = argparse.ArgumentParser(
         prog="cih install-skill",
         description="Install the interactive cih skill + agents into a Claude Code config dir")

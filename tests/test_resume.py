@@ -1,9 +1,11 @@
 # tests/test_resume.py
 import subprocess
 from pathlib import Path
+
 from cih.config import RunConfig
 from cih.orchestrator import Orchestrator, reconcile
 from cih.state import StateHeader, write_state
+
 
 def _cfg(tmp_path):
     t = tmp_path / "target"; s = tmp_path / "state"; t.mkdir(); s.mkdir()
@@ -73,7 +75,7 @@ def test_reconcile_flags_missing_branch(tmp_path):
 
 def test_reconcile_ignores_failed_team_branch(tmp_path):
     cfg = _cfg(tmp_path)
-    base = _seed_repo(Path(cfg.target_repo))
+    _seed_repo(Path(cfg.target_repo))
     Orchestrator(cfg, high_planner_fn=lambda ctx: {"opportunities": [], "charters": []},
                  team_runner_fn=lambda *a, **k: []).run()
     # A team rejected by the execution-reviewer: its branch/worktree were pruned,

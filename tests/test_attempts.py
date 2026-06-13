@@ -1,5 +1,7 @@
 import pytest
-from cih.attempts import AttemptLog, AttemptKind, AttemptCapExceeded
+
+from cih.attempts import AttemptCapExceeded, AttemptKind, AttemptLog
+
 
 def test_records_attempts_and_marks_current():
     log = AttemptLog(team_id="team-01", cap=4)

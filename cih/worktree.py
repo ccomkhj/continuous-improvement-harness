@@ -1,7 +1,9 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
-from cih.safety import run_git, GitError
+
+from cih.safety import GitError, run_git
+
 
 @dataclass
 class Worktree:
@@ -12,7 +14,7 @@ class Worktree:
 
 class WorktreeManager:
     def __init__(self, repo: Path, worktrees_root: Path, run_id: str,
-                 log: Optional[Callable[[str], None]] = None):
+                 log: Callable[[str], None] | None = None):
         self.repo = Path(repo)
         self.worktrees_root = Path(worktrees_root)
         self.run_id = run_id

@@ -1,6 +1,6 @@
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import Optional
+
 
 class AttemptKind(str, Enum):
     PLAN = "plan_retry"
@@ -19,7 +19,7 @@ class Attempt:
     branch: str
     worktree_path: str
     feedback_input: str
-    parent_attempt_id: Optional[str] = None
+    parent_attempt_id: str | None = None
     is_current: bool = True
 
 class AttemptLog:
@@ -30,7 +30,7 @@ class AttemptLog:
 
     def start(self, kind: AttemptKind, base_sha: str, branch: str,
               worktree_path: str, feedback: str,
-              parent: Optional[str] = None) -> Attempt:
+              parent: str | None = None) -> Attempt:
         if len(self._attempts) >= self.cap:
             raise AttemptCapExceeded(
                 f"{self.team_id}: attempt cap {self.cap} reached")
@@ -44,7 +44,7 @@ class AttemptLog:
         self._attempts.append(att)
         return att
 
-    def current(self) -> Optional[Attempt]:
+    def current(self) -> Attempt | None:
         return self._attempts[-1] if self._attempts else None
 
     def all(self) -> list[Attempt]:

@@ -1,7 +1,8 @@
 import json
 from pathlib import Path
-from cih.report import render_report
-from cih.report import write_report, main
+
+from cih.report import main, render_report, write_report
+
 
 def _write(path: Path, status: str, body) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)

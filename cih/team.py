@@ -1,8 +1,10 @@
 # cih/team.py
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
+
 from cih.agents import invoke
-from cih.attempts import AttemptLog, AttemptKind, AttemptCapExceeded
+from cih.attempts import AttemptCapExceeded, AttemptKind, AttemptLog
+
 
 @dataclass
 class TeamResult:

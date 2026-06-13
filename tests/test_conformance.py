@@ -1,7 +1,8 @@
 # tests/test_conformance.py
 import pytest
-from cih.roles import load_contracts, ROLE_NAMES
+
 from cih.agents import StubRunner, invoke
+from cih.roles import ROLE_NAMES, load_contracts
 
 CANNED = {
     "high-planner": {"opportunities": [], "charters": []},

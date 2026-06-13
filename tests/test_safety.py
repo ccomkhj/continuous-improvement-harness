@@ -1,8 +1,11 @@
 # tests/test_safety.py
 import subprocess
-import pytest
 from pathlib import Path
-from cih.safety import run_git, GitError, forbidden_paths, validate_no_forbidden
+
+import pytest
+
+from cih.safety import GitError, forbidden_paths, run_git, validate_no_forbidden
+
 
 def _init_repo(path: Path):
     path.mkdir(parents=True, exist_ok=True)

@@ -1,12 +1,14 @@
 # cih/orchestrator.py
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+
 from cih.config import RunConfig
-from cih.state import StateHeader, write_state, read_state
 from cih.ledger import Ledger, Opportunity, fingerprint
 from cih.merge_queue import MergeOutcome
 from cih.progress import append_progress, notify
+from cih.state import StateHeader, read_state, write_state
+
 
 @dataclass
 class IterationResult:
@@ -17,8 +19,8 @@ class IterationResult:
 
 class Orchestrator:
     def __init__(self, cfg: RunConfig, high_planner_fn: Callable,
-                 team_runner_fn: Callable, integrate_fn: Optional[Callable] = None,
-                 run_id: str = "run-1", on_iteration_end: Optional[Callable] = None):
+                 team_runner_fn: Callable, integrate_fn: Callable | None = None,
+                 run_id: str = "run-1", on_iteration_end: Callable | None = None):
         self.cfg = cfg
         self.high_planner_fn = high_planner_fn
         self.team_runner_fn = team_runner_fn
@@ -111,8 +113,10 @@ class Orchestrator:
                 fp_by_team = {c["id"]: c["opportunity_fp"]
                               for c in charters if c.get("opportunity_fp")}
 
+                # ledger_fp is called synchronously within this iteration, so the
+                # late-binding of fp_by_team that B023 warns about cannot bite here.
                 def ledger_fp(team_id):
-                    fp = fp_by_team.get(team_id)
+                    fp = fp_by_team.get(team_id)  # noqa: B023
                     return fp if fp and self.ledger.get(fp) else None
 
                 for tid in outcome.merged:
@@ -204,7 +208,8 @@ class Orchestrator:
 def reconcile(cfg: RunConfig, run_id: str) -> dict:
     """Compare persisted state against git ground truth before resuming (spec §10)."""
     import json
-    from cih.safety import run_git, GitError
+
+    from cih.safety import GitError, run_git
 
     issues = []
     state_dir = Path(cfg.state_dir)

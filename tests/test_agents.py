@@ -1,7 +1,8 @@
 # tests/test_agents.py
 import pytest
-from cih.contracts import AgentContract, OutputValidationError
+
 from cih.agents import StubRunner, invoke
+from cih.contracts import AgentContract, OutputValidationError
 
 OUT = {"type": "object", "required": ["ok"],
        "properties": {"ok": {"type": "boolean"}}}

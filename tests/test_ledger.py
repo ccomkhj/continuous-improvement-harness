@@ -1,7 +1,9 @@
 # tests/test_ledger.py
 import pytest
+
 from cih.ledger import Ledger, Opportunity, fingerprint
 from cih.transitions import InvalidTransition
+
 
 def test_fingerprint_is_stable_and_normalized():
     a = fingerprint("Improve  Test Coverage", "src/foo.py")

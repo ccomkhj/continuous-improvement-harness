@@ -1,5 +1,6 @@
 # tests/test_contracts.py
 import pytest
+
 from cih.contracts import AgentContract, OutputValidationError
 
 PLAN_OUT = {

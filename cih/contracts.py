@@ -2,7 +2,9 @@
 import hashlib
 import json
 from dataclasses import dataclass, field
-from jsonschema import validate, ValidationError
+
+from jsonschema import ValidationError, validate
+
 
 class OutputValidationError(Exception):
     pass

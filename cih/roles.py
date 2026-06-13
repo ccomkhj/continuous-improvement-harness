@@ -1,6 +1,7 @@
 # cih/roles.py
 import re
 from importlib.resources import files
+
 from cih.contracts import AgentContract
 
 ROLE_NAMES = ["high-planner", "planner", "plan-reviewer", "executor", "execution-reviewer"]

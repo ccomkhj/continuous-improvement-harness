@@ -3,6 +3,7 @@ import json
 import re
 import subprocess
 from typing import Protocol
+
 from cih.contracts import AgentContract
 
 # Matches a fenced block: ```json ... ``` or ``` ... ``` (language tag optional).
@@ -42,7 +43,7 @@ def _extract_json(text):
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
-        raise (last_err or e)
+        raise (last_err or e) from e
 
 class AgentRunner(Protocol):
     def run(self, contract: AgentContract, input_data: dict) -> dict: ...

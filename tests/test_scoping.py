@@ -1,7 +1,13 @@
 import pytest
-from cih import scoping
-from cih.scoping import StubAsker, _to_choices, _ask_positive_int
+
 from cih.config import ConfigError
+from cih.scoping import (
+    QuestionaryAsker,
+    StubAsker,
+    _ask_positive_int,
+    _to_choices,
+    run_scoping_interview,
+)
 
 
 def test_to_choices_maps_label_value_pairs():
@@ -42,9 +48,6 @@ def test_ask_positive_int_reasks_on_zero_or_negative():
     asker = StubAsker(["0", "-2", "7"])
     assert _ask_positive_int(asker, "n?", 5) == 7
     assert any("positive" in n for n in asker.notes)
-
-
-from cih.scoping import run_scoping_interview, QuestionaryAsker
 
 
 def _abs(tmp_path, name):

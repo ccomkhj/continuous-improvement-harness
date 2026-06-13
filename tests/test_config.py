@@ -1,5 +1,7 @@
 import pytest
-from cih.config import RunConfig, ConfigError, depth_budget, DEPTH_BUDGET, DEFAULT_DEPTH
+
+from cih.config import DEFAULT_DEPTH, DEPTH_BUDGET, ConfigError, RunConfig, depth_budget
+
 
 def test_valid_config(tmp_path):
     target = tmp_path / "target"; state = tmp_path / "state"

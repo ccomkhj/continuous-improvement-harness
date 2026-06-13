@@ -29,7 +29,7 @@ Repository = "https://github.com/ccomkhj/continuous-improvement-harness"
 Issues = "https://github.com/ccomkhj/continuous-improvement-harness/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "build>=1.0", "twine>=5.0"]
+dev = ["pytest>=8.0", "build>=1.0", "twine>=5.0", "ruff>=0.6"]
 
 [project.scripts]
 cih = "cih.runner:main"
@@ -45,3 +45,16 @@ cih = ["_assets/agents/*.md", "_assets/skill/SKILL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+# E501 (line length) is owned by the formatter; UP042 (str-Enum -> StrEnum) is
+# deferred because it changes str()/format() semantics of the existing enums.
+ignore = ["E501", "UP042"]
+
+[tool.ruff.format]
+# Defaults: double quotes, space indentation.

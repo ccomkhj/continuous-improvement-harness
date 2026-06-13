@@ -1,7 +1,9 @@
-import questionary
-from typing import Protocol, Sequence, Any
+from collections.abc import Sequence
+from typing import Any, Protocol
 
-from cih.config import RunConfig, ConfigError  # noqa: F401
+import questionary
+
+from cih.config import ConfigError, RunConfig  # noqa: F401
 
 
 class Asker(Protocol):

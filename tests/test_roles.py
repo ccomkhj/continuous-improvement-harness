@@ -1,8 +1,10 @@
 # tests/test_roles.py
 import pytest
-from cih.roles import load_contracts, ROLE_NAMES
+
 from cih.agents import StubRunner, invoke
 from cih.contracts import OutputValidationError
+from cih.roles import ROLE_NAMES, load_contracts
+
 
 def test_all_roles_load_with_prompt_bodies():
     contracts = load_contracts()

@@ -1,7 +1,9 @@
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from cih.safety import run_git, GitError
+
+from cih.safety import GitError, run_git
+
 
 @dataclass
 class TddVerdict:

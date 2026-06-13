@@ -1,5 +1,6 @@
 # tests/test_merge_queue.py
-from cih.merge_queue import order_by_overlap, integrate, MergeOutcome
+from cih.merge_queue import MergeOutcome, integrate, order_by_overlap
+
 
 def _charter(cid, files):
     return {"id": cid, "impact_manifest": {"intended_files": files}}

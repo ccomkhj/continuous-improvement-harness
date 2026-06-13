@@ -2,8 +2,9 @@
 import fnmatch
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+
 
 class GitError(Exception):
     pass
@@ -55,7 +56,7 @@ def _assert_git_allowed(args) -> None:
             raise GitError("git 'add -A/--all/.' is blocked; use the explicit staging wrapper")
 
 def run_git(args: list[str], cwd: Path,
-            log: Optional[Callable[[str], None]] = None) -> str:
+            log: Callable[[str], None] | None = None) -> str:
     _assert_git_allowed(args)
     cmd = ["git", *args]
     if log:

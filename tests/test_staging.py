@@ -1,8 +1,11 @@
 # tests/test_staging.py
 import subprocess
-import pytest
 from pathlib import Path
-from cih.staging import stage_files, StagingError
+
+import pytest
+
+from cih.staging import StagingError, stage_files
+
 
 def _init_repo(path: Path):
     subprocess.run(["git", "init", "-q"], cwd=path, check=True)

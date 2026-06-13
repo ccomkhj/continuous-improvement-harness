@@ -1,10 +1,10 @@
 # cih/ledger.py
 import hashlib
 import re
-from dataclasses import dataclass, field, asdict
-from typing import Optional
+from dataclasses import asdict, dataclass
 
 from cih.transitions import Status, assert_transition
+
 
 def fingerprint(title: str, scope: str) -> str:
     norm = re.sub(r"\s+", " ", title.strip().lower())
@@ -22,7 +22,7 @@ class Opportunity:
     rationale: str
     state: str = "open"
     attempt_count: int = 0
-    cooldown_until: Optional[int] = None
+    cooldown_until: int | None = None
 
 class Ledger:
     def __init__(self):
@@ -38,7 +38,7 @@ class Ledger:
             opp.cooldown_until = existing.cooldown_until
         self._items[opp.fp] = opp
 
-    def get(self, fp: str) -> Optional[Opportunity]:
+    def get(self, fp: str) -> Opportunity | None:
         return self._items.get(fp)
 
     def _set_state(self, o, dst: str) -> None:
@@ -50,7 +50,7 @@ class Ledger:
         assert_transition(Status(o.state), Status(dst))
         o.state = dst
 
-    def _refresh_cooldowns(self, current_iteration: Optional[int]) -> None:
+    def _refresh_cooldowns(self, current_iteration: int | None) -> None:
         if current_iteration is None:
             return
         for o in self._items.values():
@@ -60,7 +60,7 @@ class Ledger:
                 o.cooldown_until = None
 
     def select_open(self, value_threshold: float,
-                    current_iteration: Optional[int] = None) -> list[Opportunity]:
+                    current_iteration: int | None = None) -> list[Opportunity]:
         self._refresh_cooldowns(current_iteration)
         return [o for o in self._items.values()
                 if o.state == "open" and o.value >= value_threshold]

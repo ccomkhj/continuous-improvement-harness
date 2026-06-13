@@ -92,7 +92,7 @@ def test_team_branch_is_iteration_scoped(tmp_path):
     repo = tmp_path / "repo"; base = _seed_repo(repo)
     runner = _passing_runner()
     team_runner, _ = _build(tmp_path, repo, base, runner)
-    results = team_runner([_charter("team-01")], {"iteration": 1})
+    team_runner([_charter("team-01")], {"iteration": 1})
     # branch carries the iteration so iter-2's team-01 cannot collide
     assert _git(["rev-parse", "--verify", "cih/run-1/iter-001/team-01"], repo)
 

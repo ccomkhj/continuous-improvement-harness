@@ -1,5 +1,5 @@
 import re
-from pathlib import Path
+
 from cih.progress import append_progress, notify
 
 
@@ -42,7 +42,7 @@ def test_notify_invokes_cmd_with_line_as_final_arg(tmp_path, monkeypatch):
     sink = tmp_path / "sink.txt"
     # A tiny notifier that records its final argument (the message).
     script = tmp_path / "notify.sh"
-    script.write_text('#!/bin/sh\nprintf "%s" "$1" > "%s"\n' % ("$1", sink))
+    script.write_text(f'#!/bin/sh\nprintf "$1" "$1" > "{sink}"\n')
     script.chmod(0o755)
     monkeypatch.setenv("CIH_NOTIFY_CMD", str(script))
     notify(sd, "team t1 PASSED")

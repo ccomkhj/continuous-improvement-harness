@@ -1,6 +1,6 @@
 from importlib.resources import files
 
-from cih.roles import load_contracts, ROLE_NAMES
+from cih.roles import ROLE_NAMES, load_contracts
 
 
 def test_agent_prompts_are_packaged_resources():

@@ -1,12 +1,15 @@
 # tests/test_orchestrator.py
 from pathlib import Path
+
+import pytest
+
 from cih.config import RunConfig
-from cih.orchestrator import Orchestrator, IterationResult
 from cih.ledger import fingerprint
 from cih.merge_queue import MergeOutcome
+from cih.orchestrator import Orchestrator
 from cih.state import read_state
 from cih.team import TeamResult
-import pytest
+
 
 def _cfg(tmp_path, **over):
     t = tmp_path / "target"; s = tmp_path / "state"; t.mkdir(); s.mkdir()

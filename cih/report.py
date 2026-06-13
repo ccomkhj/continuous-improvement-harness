@@ -3,15 +3,15 @@ import html as _html
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
-def _load_json(path: Path) -> Optional[dict]:
+
+def _load_json(path: Path) -> dict | None:
     try:
         return json.loads(Path(path).read_text())
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
 
-def _read_text(path: Path) -> Optional[str]:
+def _read_text(path: Path) -> str | None:
     try:
         return Path(path).read_text()
     except (FileNotFoundError, OSError):

@@ -1,8 +1,9 @@
 # tests/test_team.py
-from cih.team import run_team, TeamResult
 from cih.agents import StubRunner
 from cih.contracts import AgentContract
 from cih.tdd_verifier import TddVerdict
+from cih.team import TeamResult, run_team
+
 
 def _contracts():
     def c(role, out):

@@ -1,6 +1,7 @@
 import subprocess
-from pathlib import Path
-from cih.tdd_verifier import verify_tdd, TddVerdict
+
+from cih.tdd_verifier import TddVerdict, verify_tdd
+
 
 def _repo(tmp_path):
     r = tmp_path / "r"; r.mkdir()
